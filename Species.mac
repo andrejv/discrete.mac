@@ -1,0 +1,1126 @@
+/*********************************************************************
+ *********************************************************************
+ ***                                                               ***
+ ***             ~*~ COMBINATORIAL SPECIES ~*~                     ***
+ ***                                                               ***
+ ***  A package for counting, listing and random generation of     ***
+ ***  unlabeled combinatorial species.                             ***
+ ***                                                               ***
+ ***  Author:  Andrej Vodopivec <andrej.vodopivec@gmail.com>       ***
+ ***  Licence: GPL                                                 ***
+ ***                                                               ***
+ ***  Notation:                                                    ***
+ ***     - all atoms for which the constructions are not           ***
+ ***       specified are considered as atoms.                      ***
+ ***     - constructions:                                          ***
+ ***        o Sum:      disjoint union                             ***
+ ***        o Prod:     product                                    ***
+ ***        o Set:      sets without repetition                    ***
+ ***        o Multiset: sets with repetition                       ***
+ ***        o Sequence: sequences                                  ***
+ ***        o Cycle:    cycles (necklaces)                         ***
+ ***        o Epsilon:  an atom with size 0                        ***
+ ***                                                               ***
+ ***  Usage:                                                       ***
+ ***     - count_species(S, sys, n)                                ***
+ ***     - list_species(S, sys, n)                                 ***
+ ***     - choose_from_species(S, sys, n)                          ***
+ ***                                                               ***
+ ***  Working with generating functions:                           ***
+ ***     - gf_equations(sys, var)                                  ***
+ ***     - gf_solve(eqns, fun)                                     ***
+ ***     - gf_express(eqns, fun)                                   ***
+ ***     - algeq_to_diffeq(eq, fun)                                ***
+ ***     - diffeq_to_rec(eq, fun)                                  ***
+ ***     - algeq_to_rec(eq, fun)                                   ***
+ ***     - rec_to_function(rec)                                    ***
+ ***                                                               ***
+ ***  Examples:                                                    ***
+ ***                                                               ***
+ ***  1) binary trees on n vertices:                               ***
+ ***     count_species(T, [T=Sum(x, Prod(x, T, T))], 11)           ***
+ ***     => 42                                                     ***
+ ***                                                               ***
+ ***  2) binary tree with n leaves:                                ***
+ ***     count_species(T, [T=Sum(x, Multiset(T, card=2))], 10)     ***
+ ***     => 98                                                     ***
+ ***     count_species(T, [T=Sum(x, Multiset(T, card=2))], 5)      ***
+ ***     => 3                                                      ***
+ ***                                                               ***
+ ***  3) Fibonacci numbers:                                        ***
+ ***     sys: [F=Seq(Sum(x, Prod(x,x)))]                           ***
+ ***     makelist(count_species(F, sys, i), i, 0, 10)              ***
+ ***     => [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]                 ***
+ ***     gf_equations(sys, z)                                      ***
+ ***     gf_solve(%)                                               ***
+ ***     => [[F(z)=-1/(z^2+z-1), ...                               ***
+ ***     ratfun_to_rec(assoc(F(z), first(%)))                      ***
+ ***     => y[n]-y[n-1]-y[n-2]                                     ***
+ ***                                                               ***
+ ***  4) Catalan numbers:                                          ***
+ ***     sys: [W=Sequence(G), G=Prod(Up, W, Left), Left=Epsilon]   ***
+ ***     count_species(W, sys, 10)                                 ***
+ ***     => binomial(20,10)/(11)                                   ***
+ ***     gf_equations(spec, z)                                     ***
+ ***     gf_express(%, W(z))                                       ***
+ ***     => -z*W(z)^2+W(z)-1                                       ***
+ ***     algeq_to_rec(%, W(z))                                     ***
+ ***     => (n+1)*y[n] + (2-4*n)*y[n-1]                            ***
+ ***                                                               ***
+ *********************************************************************/
+
+if get('graphs, 'version)=false then load(graphs)$
+
+put('Species, 1, 'version)$
+
+setup_autoload(
+  "grobner.lisp",
+  poly_reduced_grobner)$
+
+define_variable(_memory, hash_table(), any)$
+define_variable(gf_use_grobner, false, boolean)$
+
+reset_species_memory() := (_memory: hash_table(), true)$
+
+sp_error([args]) := (
+  reset_species_memory(),
+  apply('error, args))$
+
+/***********************
+ * Counting functions.
+ *
+ * A function counts the number of elements in the
+ * structure STR(A) of size n. It generates a partial
+ * generating series for A and computes the generating
+ * series of for STR(A). The number is then read from
+ * the coefficient.
+ ***/
+
+_atomp(A,sys) := A#'Epsilon and not member(A, map(lhs, sys))$
+_epsilonp(A,sys) := is('Epsilon = assoc(A,sys))$
+
+define_variable(use_short_product, true, boolean)$
+
+_count_prods(A,B,sys,n) := block(
+  if _atomp(A,sys) then (
+    _count(B,sys,n-1))
+  else if _epsilonp(A, sys) then (
+    _count(B,sys,n))
+  else if _atomp(B,sys) then (
+    _count(A,sys,n-1))
+  else if _epsilonp(B,sys) then(
+    _count(A,sys,n))
+  else block(
+    [As: makelist(_count(A,sys,i),i,0,n),
+     Bs: makelist(_count(B,sys,i),i,0,n),
+     gs],
+    xreduce("+", As*reverse(Bs))))$
+
+_count_sums(args, sys, n) := lsum(_count(x, sys, n), x, args)$
+
+_count_sequence(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt, g],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then 1 else 0)
+  else if _atomp(A,sys) then (
+    if fixed_card_lo<=n and fixed_card_hi>=n then 1
+    else 0)
+  else (
+    if _count(A,sys,0)>0 and fixed_card=false then sp_error("Infinitely many sequences!"),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: part(g, n+1)
+    else (
+      gs: cons(1, -makelist(fixed_card_var*_count(A,sys,i), i, 1, n)),
+      gs: _inv(gs, g),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: last(gs)),
+    if fixed_card#false then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+_count_multiset(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, g, cnt,
+   maperror:false, mapprint:false],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then 1 else 0)
+  else (
+    if _count(A,sys,0)>0 then (
+	  if fixed_card=false then sp_error("Infinitely many sets!")
+	  else sp_error("Not implemented!")),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: part(g, n+1)
+    else (
+      gs: cons(0, makelist(_count(A,sys,i),i,1,n)),
+      if length(g)=0 then (
+        gs: sum(fixed_card_var^i*_add_spaces(gs,i)/i,i,1,n))
+      else (
+        gs: get_hash(string(['gs_arg, currentA]), ht, []),
+        for j:length(gs) thru n do (
+          gs: endcons(
+            lsum(_count(A,sys,j/d)/d*fixed_card_var^d, d, listify(divisors(j))),
+            gs))),
+      set_hash(string(['gs_arg, currentA]), ht, rat(gs)),
+      gs: _exp(rat(gs), g),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: last(gs)),
+    if fixed_card#false then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+_count_set(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, g, cnt,
+   maperror:false, mapprint:false],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then 1 else 0)
+  else (
+    if _count(A,sys,0)>0 then (
+	  if fixed_card=false then sp_error("Infinitely many sets!")
+	  else sp_error("Not implemented!")),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: part(g, n+1)
+    else (
+      gs: cons(0, makelist(_count(A,sys,i),i,1,n)),
+      if length(g)=0 then (
+        gs: sum((-1)^i*fixed_card_var^i*_add_spaces(gs,i)/i,i,1,n))
+      else (
+        gs: get_hash(string(['gs_arg, currentA]), ht, []),
+        for j:length(gs) thru n do (
+          gs: endcons(
+            lsum((-1)^d*_count(A,sys,j/d)/d*fixed_card_var^d, d, listify(divisors(j))),
+            gs))),
+      set_hash(string(['gs_arg, currentA]), ht, rat(gs)),
+      gs: _exp(-rat(gs), g),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: last(gs)),
+    if fixed_card#false then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+_count_cycle(A,sys,opts,n) := block(
+  [gs:1, ci, x, inv:[],
+   fixed_card_var, fixed_card, fixed_card_lo, fixed_card_hi,
+   taylordepth:n],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then 1 else 0)
+  else (
+    if _count(A,sys,0)>0 and fixed_card=false then sp_error("Infinitely many cycles!"),
+    block(
+      [gs1],
+      local(gs1),
+      gs: xreduce("+", makelist('fixed_card_var*x^i*_count(A,sys,i), i, 1, n)),
+      define(gs1('fixed_card_var, x), gs),
+      gs: sum(totient(k)/k*sum(gs1(fixed_card_var^k,x^k)^i/i, i, 1, floor(n/k)), k, 1, n)),
+    cnt: _ts_coeff(gs, x, n),
+    if fixed_card=true then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+count_species(A,sys,n) := block(
+  [ht,keys:[],std_frm],
+  std_frm: standard_form(sys),
+  ht: get_hash(string([std_frm, species_labeled]), _memory),
+  if ht=false then (
+    ht: hash_table(),
+    set_hash(string([std_frm, species_labeled]), _memory, ht)),
+  _count(A,std_frm,n))$
+
+_count(A,sys,n) := block(
+  [As:psubst(sys, A), c, currentA:A],
+  if n<0 then return(0),
+  c: get_hash(string([A, n]), ht),
+  if c=false then (
+    set_hash(string([A, n]), ht, 0),
+    keys: cons([A,n], keys),
+    if atom(As) then c:(
+      if As='Epsilon then (if n=0 then 1 else 0)
+      else (if n=1 then 1 else 0))
+    else if op(As)='Prod then c:_count_prods(part(As, 1), part(As, 2), sys, n)
+    else if op(As)='Sum or op(As)='Union then c:_count_sums(args(As), sys, n)
+    else if op(As)='Sequence or op(As)='Seq then c:_count_sequence(first(As), sys, rest(args(As)), n)
+    else if op(As)='Multiset or op(As)='MSet then c:_count_multiset(first(As), sys, rest(args(As)), n)
+    else if op(As)='Set then c:_count_set(first(As), sys, rest(args(As)), n)
+    else if op(As)='Cycle then c:_count_cycle(first(As), sys, rest(args(As)), n)
+    else if op(As)='Function then c:apply(first(As), [n])
+    else sp_error("Not Implemented"),
+    c: ratdisrep(c),
+    if atom(A) then (
+      if c#get_hash(string([A,n]), ht) then (
+        set_hash(string([A, n]), ht, c),
+        /* We need to forget all values for structures of size n
+           computed after the wrong value for [A,n] was stored into the hash table! */
+        while first(keys)#[A,n] do (
+          if part(keys, 1, 2)=n then (
+            set_hash(string(first(keys)), ht, false),
+            block(
+              [gs: get_hash(string(['gs,first(keys[1])]), ht, [])],
+              if length(gs)>n then set_hash(string(['gs,first(keys[1])]), ht, makelist(gs[i],i,1,n)),
+              gs: get_hash(string(['gs_arg,first(keys[1])]), ht, []),
+              if length(gs)>n then set_hash(string(['gs_arg,first(keys[1])]),ht,makelist(gs[i],i,1,n)))),
+          keys: rest(keys)))),
+    c)
+  else c)$
+
+/***********************
+ * Random generation functions
+ ***/
+
+_choose_index(lst) :=
+  if length(lst)=1 then 1
+  else block(
+    [idx:0, idx_sum: 0, cnt: xreduce("+", lst), rnd_int],
+    if cnt=0 then sp_error("No such element"),
+    rnd_int: random(ratdisrep(cnt))+1,
+    for e in lst while idx_sum<rnd_int do(
+      idx: idx+1,
+      idx_sum: idx_sum + e),
+    idx)$
+
+_choose_prod(A, B, sys, n) := block(
+  [Ac: makelist(_count(A, sys, i), i, 0, n),
+   Bc: makelist(_count(B, sys, i), i, 0, n),
+   cnt, idx],
+  cnt: Ac*reverse(Bc),
+  idx: _choose_index(cnt)-1,
+  'PROD(_choose(A, sys, idx), _choose(B, sys, n-idx)))$
+
+_choose_sum(A, sys, n) := block(
+  [Ac: makelist(_count(a, sys, n), a, A), idx],
+  idx: _choose_index(Ac),
+  _choose(A[idx], sys, n))$
+
+_sequence_card_gs(A,Ao,sys,n) := block(
+  [g,gs],
+  g: get_hash(string(['gs, 'card, Ao]), ht, []),
+  if length(g)>n then g
+  else (
+    gs: cons(1, -makelist(rat('u)*_count(A,sys,i), i, 1, n)),
+    gs: _inv(gs, g),
+    set_hash(string(['gs, 'card, Ao]), ht, gs)))$
+
+_count_sequence_card(A,Ao,sys,n,card) := block(
+  [gs: _sequence_card_gs(A,Ao,sys,n)],
+  ratcoef(part(gs, n+1), 'u, card))$
+
+_choose_sequence_card1(A,Ao,sys,n,card) :=
+  if card=0 then 'SEQ()
+  else if card=1 then 'SEQ(_choose(A,sys,n))
+  else block(
+    [Al: makelist(_count(A,sys,i),i,0,n),
+     Bl: makelist(_count_sequence_card(A,Ao,sys,i,card-1),i,0,n),
+     cnt, idx],
+    cnt: Al*reverse(Bl),
+    idx: _choose_index(cnt)-1,
+    append('SEQ(_choose(A,sys,idx)), _choose_sequence_card1(A,Ao,sys,n-idx,card-1)))$
+
+_choose_sequence_card(A,Ao,sys,opts,n) := block(
+  [gs, cnt, idx, fixed_card_lo, fixed_card_hi, fixed_card_var, fixed_card],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  gs: _sequence_card_gs(A,Ao,sys,n),
+  cnt: part(gs, n+1),
+  cnt: makelist(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi),
+  idx: _choose_index(cnt),
+  _choose_sequence_card1(A,Ao,sys,n,idx+fixed_card_lo-1))$
+
+_choose_sequence(A,Ao,sys,opts,n) :=
+  if length(opts)#0 then _choose_sequence_card(A,Ao,sys,opts,n)
+  else if _count(A,sys,0)>0 then sp_error("Infinitely many sequences")
+  else if n=0 then 'SEQ()
+  else block(
+    [Ac: makelist(_count(A,sys,i),i,0,n),
+     Bc: makelist(_count(Ao,sys,i),i,0,n),
+     cnt, idx],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt)-1,
+    cons(_choose(A,sys,idx), _choose_sequence(A,Ao,sys,opts,n-idx)))$
+
+_count_stacks(A, sys, n) :=
+  if get_hash(string([A, 'stack, n]), ht)#false then get_hash(string([A, 'stack, n]), ht)
+  else block(
+    [d_list: listify(divisors(n)), c],
+    c: xreduce("+", makelist(d*_count(A, sys, d), d, d_list)),
+    set_hash(string([A, 'stack, n]), ht, c),
+    c)$
+
+_choose_stack(A, sys, n) := block(
+  [d_list: listify(divisors(n)), idx, Asel],
+  idx: _choose_index(makelist(d*_count(A, sys, d), d, d_list)),
+  Asel: _choose(A, sys, d_list[idx]),
+  makelist(Asel, n/d_list[idx]))$
+
+_choose_multiset(A,Ao,sys,opts,n) :=
+  if n=0 then []
+  else block(
+    [Al, Bl, ms_count, idx, stack],
+    Al: makelist(_count_stacks(A, sys, i), i, 1, n),
+    Bl: makelist(_count(Ao,sys,i), i, 0, n-1),
+    ms_count: Al*reverse(Bl),
+    idx: _choose_index(ms_count),
+    stack: _choose_stack(A,sys,idx),
+    append(stack, _choose_multiset(A,Ao,sys,opts,n-idx)))$
+
+_multiset_card_gs(A,Ao,sys,n) := block(
+  [g,gs],
+  g: get_hash(string(['gs, 'card, Ao]), ht, []),
+  if length(g)>n then g
+  else (
+    gs: cons(0, makelist(_count(A,sys,i),i,1,n)),
+    gs: sum(fixed_card_var^i*_add_spaces(gs,i)/i,i,1,n),
+    gs: _exp(rat(gs), g),
+    set_hash(string(['gs, 'card, Ao]), ht, gs)))$
+
+_count_multiset_card(A,Ao,sys,n,card) := block(
+  [gs: _multiset_card_gs(A,Ao,sys,n)],
+  ratcoef(part(gs, n+1), 'u, card))$
+
+_choose_multiset_card(A,Ao,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt, idx],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then [] else sp_error("No such element"))
+  else (
+    gs: _multiset_card_gs(A,Ao,sys,n),
+    cnt: part(gs, n+1),
+    cnt: makelist(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi),
+    idx: _choose_index(cnt),
+    _choose_multiset_card1(A,Ao,sys,n,idx+fixed_card_lo-1)))$
+
+_choose_multiset_card1(A,Ao,sys,n,card) :=
+  if n=0 then []
+  else if card=1 then [_choose(A,sys,n)]
+  else block(
+    [cnt:[], idx, n1, card1],
+    for card1:0 thru card-1 do (
+      for n1:card1 thru n-1 do (
+        if integerp((n-n1)/(card-card1)) then block(
+          [n2: (n-n1)/(card-card1)],
+          cnt: cons([
+            n2*_count(A,sys,n2)*_count_multiset_card(A,Ao,sys,n1,card1),
+            n1, card1],
+            cnt)))),
+    idx: _choose_index(map(first, cnt)),
+    [n1, card1]: rest(cnt[idx]),
+    append(makelist(_choose(A,sys,(n-n1)/(card-card1)), card-card1),
+      _choose_multiset_card1(A,Ao,sys,n1,card1)))$
+
+_count_sets1_card(distrib, n, card) := block(
+  [gs, cnt],
+  cnt: get_hash(string(['set_count_card,distrib,n,card]), ht),
+  if cnt#false then return(cnt),
+  gs: xreduce("*", makelist((1+u*x^i[1])^i[2], i, distrib)),
+  gs: _ts_coeff(gs, x, n),
+  set_hash(string(['set_count_card,distrib,n,card]),ht,ratcoeff(gs, u, card)))$
+
+_find_shape_card(distrib, n, card) := 
+  if length(distrib)=1 then block(
+    [i1, c1, k],
+    [i1, c1]:first(distrib),
+    k: n/i1,
+    if not integerp(k) then sp_error()
+    else [[i1, k]])
+  else if n=0 then makelist([0,0], length(distrib))
+  else block(
+    [Al, Bl, i1, c1, idx],
+    [i1, c1]: first(distrib),
+    Al: makelist(binomial(c1,i),i,0,c1),
+    Bl: makelist(_count_sets1_card(rest(distrib), n-i1*i, card-i),i,0,c1),
+    idx: _choose_index(Al*Bl)-1,
+    cons([i1, idx], _find_shape_card(rest(distrib), n-i1*idx, card-idx)))$
+
+_count_sets1(distrib, n) := block(
+  [gs, cnt],
+  cnt: get_hash(string(['set_count, distrib, n]), ht),
+  if cnt#false then return(cnt),
+  gs: xreduce("*", makelist((1+x^i[1])^i[2], i, distrib)),
+  set_hash(string(['set_count, distrib, n]), ht, _ts_coeff(gs, x, n)))$
+
+_find_shape(distrib, n) := block(
+  if length(distrib)=1 then block(
+    [i1, c1, k],
+    [i1, c1]:first(distrib),
+    k: n/i1,
+    if not integerp(k) then sp_error()
+    else [[i1, k]])
+  else if n=0 then makelist([0,0], length(distrib))
+  else block(
+    [Al, Bl, i1, c1, idx],
+    [i1, c1]: first(distrib),
+    Al: makelist(binomial(c1,i),i,0,c1),
+    Bl: makelist(_count_sets1(rest(distrib), n-i1*i),i,0,c1),
+    idx: _choose_index(Al*Bl)-1,
+    cons([i1, idx], _find_shape(rest(distrib), n-i1*idx))))$
+
+_choose_set(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false, shape, set:[],
+   fixed_card_lo:0, fixed_card_hi:n, cnt, choices, idx,
+   taylordepth:n],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then [] else sp_error("No such element"))
+  else block(
+    [a_distrib:[], acnt],
+	if _count(A,sys,0)>0 then sp_error("Infinitely many sets!"),
+    /* Compute the shape of the set (inefficient) */
+    for i:1 thru n do (
+      if (acnt: _count(A,sys,i))>0 then a_distrib: cons([i, acnt], a_distrib)),
+    if length(opts)=0 then
+      shape: _find_shape(a_distrib, n)
+    else block(
+      [sel_card],
+      for i:1 thru n do gs:gs*(1+u*x^i)^_count(A,sys,i),
+      cnt: _ts_coeff(gs, x, n),
+      cnt: makelist(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi),
+      idx: _choose_index(cnt) + fixed_card_lo - 1,
+      shape: _find_shape_card(a_distrib, n, idx)),
+    /* Select a random set with chosen shape. */
+    for s in shape do block(
+      [icount:0],
+      while s[2]>icount do block(
+        [c: _choose(A,sys,s[1])],
+        if not member(c, set) then (
+          icount: icount+1,
+          set: cons(c, set)))),
+    set))$
+
+_rotate_cycle(Cyc) := block(
+  [rCyc:Cyc, mCyc:Cyc],
+  for i:1 thru length(Cyc) do (
+    rCyc: endcons(first(rCyc), rest(rCyc)),
+    if orderlessp(rCyc, mCyc) then mCyc:rCyc),
+  mCyc)$
+
+_choose_cycle(A,Ao,sys,opts,n) :=
+  if n=0 then []
+  else block(
+    [Al, idx, choice_d, seq, gs, gs1, cnt, choice_card, x,
+     fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi,
+     taylordepth:n],
+    local(gs1),
+    if _count(A,sys,0)>0 then sp_error("Infinitely many cycles!"),
+    [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+    /* Distribution of the number of cycles. */
+    cnt: get_hash(string(['cdistrib,A,opts,n]), ht),
+    if cnt=false then (
+      fixed_card_var:'u,
+      gs: xreduce("+", makelist('fixed_card_var*x^i*_count(A,sys,i), i, 1, n)),
+      define(gs1('fixed_card_var, x), gs),
+      gs: sum(totient(k)/k*sum(gs1(fixed_card_var^k,x^k)^i/i, i, 1, floor(n/k)), k, 1, n),
+      cnt: _ts_coeff(gs, x, n),
+      cnt: makelist(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi),
+      set_hash(string(['cdistrib,A,opts,n]),ht,cnt)),
+    /* Choose the cardinality of the cycle. */
+    choice_card: _choose_index(cnt) + fixed_card_lo - 1,
+    /* Choose the length of the sequence which defines the necklace. */
+    Al: makelist([
+      totient(d)*_count_sequence_card(A,Ao,sys,n/d,choice_card/d), d],
+      d,listify(divisors(gcd(n, choice_card)))),
+    idx: _choose_index(map(first, Al)),
+    /* Choose the sequence. */
+    choice_d: second(Al[idx]),
+    seq: _choose_sequence_card(A,Ao,sys,['card=choice_card/choice_d],n/choice_d),
+    /* Change the sequence to the necklace. */
+    _rotate_cycle(apply('CYCLE, xreduce(append, makelist(args(seq), choice_d)))))$
+
+select_from_species([args]) := apply(choose_from_species, args)$
+
+choose_from_species(A,sys,n) := block(
+  [ht, keys:[], std_sys:standard_form(sys)],
+  ht: get_hash(string([std_sys, species_labeled]), _memory),
+  if ht=false then (
+    ht:hash_table(),
+    set_hash(string([std_sys, species_labeled]), _memory, ht)),
+  _choose(A,std_sys,n))$
+
+_choose(A,sys,n) := block(
+  [As:psubst(sys, A), c],
+  if atom(As) then c:(
+    if As='Epsilon then (if n=0 then A else 0)
+    else (if n=1 then A else 0))
+  else if op(As)='Prod then c:_choose_prod(part(As, 1), part(As, 2), sys, n)
+  else if op(As)='Sum or op(As)='Union then c:_choose_sum(args(As), sys, n)
+  else if op(As)='Sequence or op(As)='Seq then c:_choose_sequence(first(As), A, sys, rest(args(As)), n)
+  else if op(As)='Multiset or op(As)='MSet then block(
+    [opts: rest(args(As))],
+    if length(opts)=0 then c:apply('MSET, sort(_choose_multiset(first(As), A, sys, opts, n)))
+    else c:apply('MSET, sort(_choose_multiset_card(first(As), A, sys, opts, n))))
+  else if op(As)='Set then c:apply('SET, sort(_choose_set(first(As), sys, rest(args(As)), n)))
+  else if op(As)='Cycle then c:_choose_cycle(first(As), A, sys, rest(args(As)), n)
+  else if op(As)='Function then block([fun: first(As)],
+    if apply(fun, [n])>0 then c:FUN(n) else sp_error("No such element"))
+  else sp_error("Not Implemented"),
+  c)$
+
+/***********************
+ * Listing functions
+ ***/
+
+_list_prods(A,B,sys,n) := block(
+  [As: makelist(_list(A,sys,i),i,0,n),
+   Bs: makelist(_list(B,sys,i),i,0,n)],
+  if As=[] or Bs=[] then []
+  else xreduce(append,
+    map(lambda([x,y],
+        if x=[] or y=[] then [] else create_list('PROD(x_,y_), x_, x, y_, y)),
+      As, reverse(Bs))))$
+
+_list_sums(args, sys, n) := block(
+  [args_sums: makelist(_list(x, sys, n), x, args)],
+  xreduce(append, args_sums))$
+
+_list_set1(elts, w) :=
+  if length(elts)=0 then []
+  else if w<=0 then []
+  else if length(first(elts))=0 then _list_set1(rest(elts), w)
+  else block(
+    [f:first(elts)],
+    if first(f)>w then []
+    else if first(f)=w then append(['SET(second(f))], _list_set1(rest(elts), w))
+    else append(
+      map(lambda([s], cons(second(f), s)), _list_set1(rest(elts), w-first(f))),
+      _list_set1(rest(elts), w)))$
+
+_list_set(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n<0 then []
+  else if n=0 then (
+    if fixed_card_lo=0 then ['SET()] else [])
+  else block(
+    [atoms, sets: []],
+    if _count(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many sets!")
+      else sp_error("Not Implemented")),
+    atoms: xreduce(append, makelist(map(lambda([e], [i, e]), _list(A, sys, i)), i, 1, n)),
+    sets: _list_set1(atoms, n),
+    if fixed_card=true then
+      sublist(sets, lambda([s], is(length(s)>=fixed_card_lo and length(s)<=fixed_card_hi)))
+    else
+      sets))$
+
+_list_multiset1(elts, w) :=
+  if length(elts)=0 then []
+  else if w<=0 then []
+  else if length(first(elts))=0 then _list_multiset1(rest(elts), w)
+  else block(
+    [f:first(elts)],
+    if first(f)>w then []
+    else if first(f)=w then append(['MSET(second(f))], _list_multiset1(rest(elts), w))
+    else append(
+      map(lambda([s], cons(second(f), s)), _list_multiset1(elts, w-first(f))),
+      _list_multiset1(rest(elts), w)))$
+
+_list_multiset(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n<0 then []
+  else if n=0 then (
+    if fixed_card_lo=0 then ['MSET()] else [])
+  else block(
+    [atoms, l:0, sets: []],
+    if _count(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many multisets!")
+      else sp_error("Not Implemented")),
+    atoms: xreduce(append, makelist(map(lambda([e], [i, e]), _list(A, sys, i)), i, 1, n)),
+    sets: _list_multiset1(atoms, n),
+    if fixed_card=true then
+      sublist(sets, lambda([s], is(length(s)>=fixed_card_lo and length(s)<=fixed_card_hi)))
+    else
+      sets))$
+
+_list_sequence1(elts,w,ml) :=
+  if length(elts)=0 then []
+  else if w<=0 then []
+  else if ml<=0 then []
+  else block(
+    [l:0, seqs:[]],
+    for lev in elts do (
+      l:l+1,
+      if length(lev)>0 then block(
+        [rst: _list_sequence1(elts,w-l,ml-1)],
+        if w=l then seqs: append(makelist('SEQ(e), e, lev), seqs)
+        else for e in lev do (
+          seqs: append(map(lambda([s], cons(e, s)), rst), seqs)))),
+    seqs)$
+
+_list_sequence(A,sys,opts,n) := block(
+  [fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n<0 then []
+  else if n=0 then (
+    if fixed_card_lo=0 then ['SEQ()] else [])
+  else block(
+    [atoms, seqs: []],
+    if _count(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many sequences!")
+      else sp_error("Not Implemented")),
+    atoms: makelist(_list(A, sys, i), i, 1, n),
+    seqs: _list_sequence1(atoms,n,fixed_card_hi),
+    if fixed_card=true then
+      sublist(seqs, lambda([s], is(length(s)>=fixed_card_lo and length(s)<=fixed_card_hi)))
+    else
+      seqs))$
+
+/**********
+ * listing cycles based on
+ *   J. Sawada, A fast algorithm to generate necklaces with fixed content,
+ *   Theo. Comp. Sci. 301, 2003, 477-489.
+ *********/
+
+_freqs(s_list) := block(
+  [freqs:[],cnt:0,s_lst0:s_list[1]],
+  for s in s_list do (
+    if s_lst0=s then cnt:cnt+1
+    else (
+      freqs: cons(s_lst0=cnt, freqs),
+      cnt:1, s_lst0:s)),
+  cons(s_lst0=cnt, freqs))$
+
+_cycle_fixed_content(t, p, k, nsum) := block(
+  [j],
+  if t>nsum then (
+    if mod(nsum,p)=0 then _necklaces: cons(copylist(_alst), _necklaces))
+  else (
+    for j:_alst[t-p] thru k-1 do (
+      if _nlst[j+1]>0 then (
+        _alst[t]:j,
+        _nlst[j+1]:_nlst[j+1]-1,
+        if j=_alst[t-p] then _cycle_fixed_content(t+1, p, k, nsum)
+        else _cycle_fixed_content(t+1, t, k, nsum),
+        _nlst[j+1]:_nlst[j+1]+1))))$
+
+_mset_to_cycles(mst) := block(
+  [freqs: _freqs(args(mst)), _necklaces:[], _alst, _nlst, k, nsum, i:0, mp:[]],
+  k: length(freqs),
+  nsum: xreduce("+", map(rhs, freqs)),
+  _alst: makelist(0, nsum),
+  _nlst: map(rhs, freqs),
+  _nlst[1]:_nlst[1]-1,
+  _cycle_fixed_content(2, 1, k, nsum),
+  for e in map(lhs, freqs) do (mp: cons(i=e, mp), i:i+1),
+  map(lambda([neck], apply('CYCLE, psubst(mp, neck))), _necklaces))$
+
+_list_cycle(A,sys,opts,n) := block(
+  [msets: _list_multiset(A,sys,opts,n)],
+  apply(append, map(_mset_to_cycles, msets)))$
+
+list_species(A,sys,n) := block(
+  [htl:hash_table(), keysl:[], ht, keys:[], std_frm],
+  std_frm: standard_form(sys),
+  ht: get_hash(string([std_frm, species_labeled]), _memory),
+  if ht=false then (
+    ht: hash_table(),
+    set_hash(string([std_frm, species_labeled]), _memory, ht)),
+  _list(A,std_frm,n))$
+
+_list(A,sys,n) := block(
+  [As:psubst(sys, A), c],
+  c: get_hash(string([A, n]), htl),
+  if c=false then (
+    set_hash(string([A, n]), htl, []),
+    keysl: cons([A,n], keysl),
+    if atom(As) then c:(
+      if As='Epsilon then (if n=0 then [A] else [])
+      else (if n=1 then [As] else []))
+    else if op(As)='Prod then c:_list_prods(part(As, 1), part(As, 2), sys, n)
+    else if op(As)='Sum or op(As)='Union then c:_list_sums(args(As), sys, n)
+    else if op(As)='Sequence or op(As)='Seq then c:_list_sequence(first(As), sys, rest(args(As)), n)
+    else if op(As)='Multiset or op(As)='MSet then c:_list_multiset(first(As), sys, rest(args(As)), n)
+    else if op(As)='Set then c:_list_set(first(As), sys, rest(args(As)), n)
+    else if op(As)='Cycle then c:_list_cycle(first(As), sys, rest(args(As)), n)
+    else if op(As)='Function then block(
+      [s: apply(first(As), [n])],
+      if s=1 then c:[FUN(n)]
+      else c:makelist(FUN(n,i), i, 1, s))
+    else sp_error("Not Implemented"),
+    if atom(A) then (
+      if c#get_hash(string([A,n]), htl) then (
+        set_hash(string([A, n]), htl, c),
+        /* We need to forget all values for structures of size n
+           computed after the wrong value for [A,n] was stored into the hash table! */
+        while first(keysl)#[A,n] do (
+          if part(keysl, 1, 2)=n then set_hash(string(first(keysl)), htl, false),
+          keysl: rest(keysl)))),
+    c)
+  else c)$
+
+/***********************
+ * Generating functions
+ ***/
+
+_find_atoms(spec) := 
+  listify(
+    setdifference(
+      setify(
+        flatten(
+          map(lambda([Expr],
+              if not atom(Expr) and member(op(Expr), [Prod, Sum]) then args(Expr)
+              else if atom(Expr) then []
+              else if op(Expr)='Function then []
+              else [first(Expr)]),
+            map(rhs, spec)))),
+      setify(map(lhs, spec))))$
+
+_make_fun(e, var) := if numberp(e) then e else e(var)$
+
+gf_equations(spec, var) := block(
+  [spec: standard_form(_change_seqs(standard_form(spec))), atoms, equations_a, equations_s],
+  atoms: _find_atoms(spec),
+  equations_a: makelist(atm(var)=if atm=Epsilon then 1 else var, atm, atoms),
+  equations_s: map(
+    lambda([eq],
+      lhs(eq)(var) = psubst(
+        [Epsilon=1,
+         Sum=lambda([[args]],
+           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
+         Union=lambda([[args]],
+           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
+         Prod=lambda([a_,b_], _make_fun(a_, var)*_make_fun(b_, var)),
+         Set=lambda([[a_]], a_:first(a_), exp(-sum((-1)^k/k*a_(var^k),k,1,inf))),
+         MSet=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
+         Multiset=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
+         Cycle=lambda([[a_]], a_:first(a_), sum(totient(k)/k*log(1/(1-a_(var^k))), k, 1, inf)),
+         Seq=lambda([[a_]], a_:first(a_), 1/(1-a_(var))),
+         Sequence=lambda([[a_]], a_:first(a_), 1/(1-a_(var)))],
+        rhs(eq))),
+    spec),
+  append(equations_s, equations_a))$
+
+gf_express(sys, fun, [options]) := block(
+  [funs, expr],
+  funs: map(lhs, sys),
+  sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
+  if assoc('use_grobner, options, gf_use_grobner)=true then
+    sys: ratsimp(poly_reduced_grobner(sys, funs)),
+  expr: first(eliminate(sys, delete(fun, funs))),
+  ratdisrep(second(content(rat(expr, fun)))))$
+
+gf_solve(sys, [options]) := block(
+  [funs],
+  funs: map(lhs, sys),
+  sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
+  if assoc('use_grobner, options, gf_use_grobner)=true then
+    sys: ratsimp(poly_reduced_grobner(sys, funs)),
+  solve(sys, funs))$
+
+ratfun_to_diffeq(ratfun, fun) := block(
+  [var, deg, diff_eqn],
+  var: first(listofvars(fun)),
+  deg: hipow(num(ratfun), var),
+  diff_eqn: (fun=ratfun)*denom(ratfun),
+  diff(diff_eqn, var, deg+1))$
+
+/*******
+ * algeq_to_diffeq is based on MuPAD-Combinat function
+ * algeqtodiffeq
+ ****/
+
+algeq_to_diffeq(eq, fun) := block(
+  [x,y,g,u,v,deg,Y,A,i],
+  local(Y),
+  eq: expand(num(ratsimp(rhs(eq)-lhs(eq)))),
+  if hipow(eq, fun)=1 then return(eq),
+  y: op(fun),
+  x: first(fun),
+  eq: subst(fun=y, eq),
+  [u,v,g]: gcdex(diff(eq,y),eq,y),
+  if not freeof(y, g) then return(algeq_to_diffeq(ratsimp(eq/g), fun)),
+  deg: hipow(eq,y),
+  Y[1]: ratsimp(remainder(-u*g*diff(eq,x),eq,y)),
+  for d:2 thru deg-1 do (
+    Y[d]: ratsimp(remainder(diff(Y[d-1],x)+diff(Y[d-1],y)*Y[1], eq, y))),
+  A: [append([1,0], makelist(0, deg-2), [1]),
+      append([0,1], makelist(0, deg-2), [y(x)])],
+  for d:1 thru deg-1 do (
+    A: append(A,[
+      append(
+        makelist(ratcoef(Y[d], y, i), i, 0, deg-1),
+        [diff(y(x), x, d)])])),
+  A: _gaussElim(apply('matrix, A)),
+  i:1,
+  while freeof(y, A[i,i]) do i:i+1,
+  num(ratsimp(A[i,i])))$
+
+_gaussElim(M) := block(
+  [M1: copymatrix(M), n:length(M)],
+  for i:1 thru n do block(
+    [pv: i],
+    while pv<=length(M1) and ratsimp(M1[pv,i])=0  do pv: pv+1,
+    if pv>length(M) then error("Singular matrix!", M),
+    if pv#i then [M1[pv], M1[i]]: [M1[i], M1[pv]],
+    for j:i+1 thru n do (
+      M1[j]: M1[j] - M1[j,i]/M[i,i]*M1[i])),
+  M1)$
+
+_shift_diff_eq(diffeq, fvar) := block(
+  [x:op(fvar), n:first(fvar), maxshift:minf],
+  scanmap(
+    lambda([expr],
+      block([sft:0],
+        if not atom(expr) and
+        subvarp(expr) and
+        op(expr)=x then (
+          sft: first(expr)-n,
+          if sft>maxshift then maxshift:sft)),
+      expr),
+    diffeq,
+    bottomup),
+  ratsimp(subst(n=n-maxshift, diffeq)))$
+
+diffeq_to_rec(deq, fun, [opts]) := block(
+  [deq: expand(num(ratsimp(rhs(deq)-lhs(deq)))), rec, rfun, rvar, var, pol_part, pol_deg],
+  var: first(fun),
+  if length(opts)=2 then [rfun, rvar]: opts
+  else if length(opts)=1 then (rfun:op(opts[1]), rvar:first(opts[1]))
+  else [rfun, rvar]: ['y, 'n],
+  pol_part: map(
+    lambda([term],
+      if freeof(fun, term) then term else 0),
+    deq),
+  pol_deg: hipow(pol_part, var),
+  if pol_part#0 then deq: diff(deq, var, pol_deg+1),
+  rec: map(
+    lambda([expr],
+      block([ddeg: derivdegree(expr, fun, var), pdeg, shift],
+        pdeg: hipow(expr/'diff(fun,var,ddeg),var),
+        shift: ddeg-pdeg,
+        expr/var^pdeg/'diff(fun,var,ddeg)*
+          pochhammer(rvar-ddeg+1+shift, ddeg)*rfun[rvar+shift])),
+    deq),
+  _shift_diff_eq(second(content(rec)), rfun[rvar]))$
+
+algeq_to_rec(eq, fun, [fn]) :=
+  if length(fn)=1 then diffeq_to_rec(algeq_to_diffeq(eq, fun), fun, fn[1])
+  else diffeq_to_rec(algeq_to_diffeq(eq, fun), fun)$
+
+ratfun_to_rec(rat_fun, [fn]) := block(
+  [var: first(listofvars(rat_fun)), F:gensym()],
+  if length(fn)=1 then algeq_to_rec(rat_fun-F(var), F(var), fn[1])
+  else algeq_to_rec(rat_fun-F(var), F(var)))$
+
+rec_to_function(rec, xn, init, [fn]) := block(
+  [function, var, sol],
+  if length(fn)=1 then function: first(fn) else function: concat(op(xn), _rf),
+  var: first(xn),
+  sol: solve(rec, xn),
+  if length(sol)#1 then error("Unable to express", xn),
+  sol: first(sol),
+  sol: rhs(subst(op(xn)=function, sol)),
+  apply(remarray, [function]),
+  apply(define,
+    [function[n],
+    if var<=length(init) then part(init, var)
+    else sol]))$
+
+/***********************
+ * Power series computation.
+ *
+ * Functions recieve the last argument g which is a partial
+ * result stored from previous computation.
+ ***/
+
+_short_product(a, b) := block(
+  [n:length(a), n0, n1,
+   a_even:[], a_odd:[], b_even:[], b_odd:[], even:true,
+   l, h, m, maperror:false, mapprint:false],
+  if n=1 then return(a*b),
+  for e in a do (
+    if even then a_even: cons(e, a_even)
+    else a_odd: cons(e, a_odd),
+    even: not(even)),
+  even:true,
+  for e in b do (
+    if even then b_even: cons(e, b_even)
+    else b_odd: cons(e, b_odd),
+    even: not(even)),
+  a_even: reverse(a_even), a_odd: reverse(a_odd),
+  b_even: reverse(b_even), b_odd: reverse(b_odd),
+  l: _short_product(a_even, b_even),
+  h: _short_product(a_odd, b_odd),
+  m: _short_product(a_even+a_odd,b_even+b_odd) - l - h,
+  _add_spaces_long(l, 2) +
+    cons(0, _add_spaces_long(m, 2)) +
+    cons(0, cons(0, _add_spaces_long(h, 2))))$
+
+_inv(b, g) := block(
+  [maperror:false, mapprint:false,n:length(b)],
+  if length(g)=0 then g:[1/first(b)],
+  g:reverse(g),
+  for i:length(g)+1 thru n do (
+    g: cons(-xreduce("+", g*rest(b))/first(b), g)),
+  reverse(g))$
+
+_div(a,b,g) := block(
+  [maperror:false, mapprint:false,n:min(length(a),length(b))],
+  if length(g) = 0 then g:[first(a)/first(b)],
+  g:reverse(g),
+  for i:length(g)+1 thru n do (
+    g: cons(rat((a[i]-xreduce("+", map("*", g, rest(b))))/first(b)), g)),
+  reverse(g))$
+
+_int(f) := block(
+  [i:1, inf_f],
+  int_f: map(lambda([t], i:i+1, 1/(i-1)*t), f),
+  cons(0, int_f))$
+
+_diff(f) := block(
+  [i:1],
+  map(lambda([t], i:i+1, (i-1)*t), rest(f)))$
+
+_exp(f,g) := block(
+  [fp,maperror:false, mapprint:false,n:length(f)],
+  fp: _diff(f),
+  if length(g)=0 then g:[exp(first(f))],
+  g: reverse(g),
+  for i:length(g)+1 thru n do (
+    g: cons(1/(i-1)*xreduce("+", fp*g), g)),
+  reverse(g))$
+
+_add_spaces(lst, n) := block(
+  [i:1, sp:[], lst_len: length(lst)],
+  for e in lst while i<=lst_len do (
+    sp: cons(e, sp),
+    i: i+1,
+    for j:1 thru n-1 while i<=lst_len do (
+      sp: cons(0, sp),
+      i: i+1)),
+  reverse(sp))$
+
+_add_spaces_long(lst,n):= makelist(
+  if mod(i-1,n) = 0 then lst[1+(i-1)/n] else 0,
+  i,1,n*length(lst))$
+
+/***********************
+ * Other functions
+ ***/
+
+_ts_coeff(ser,var,n) := ratdisrep(coeff(taylor(ser, var, 0, n), var, n))$
+
+standard_form(lst) :=block(
+  [std_frm, new_spec:[], old_spec, lst1],
+  std_frm: get_hash(string(lst), _memory),
+  if std_frm=false then (
+    lst1: _fix_prods(lst),
+    old_spec: makelist(
+      lhs(s) = if atom(rhs(s)) then rhs(s)
+               else if op(rhs(s))='Function then rhs(s)
+               else map(_standard_form,rhs(s)), s, lst1),
+    std_frm: append(old_spec, new_spec),
+    set_hash(string(lst), _memory, std_frm)),
+  std_frm)$
+
+_change_seqs(spec) := 
+  xreduce(append,
+    map(
+      lambda([eq],
+        if not atom(rhs(eq)) and member(op(rhs(eq)), ['Sequence, 'Seq]) then block(
+          [newsym:gensym(), hi, lo, options: rest(args(rhs(eq)))],
+          lo: assoc('min_card, options, 0),
+          hi: assoc('max_card, options, inf),
+          if hi#inf then [eq]
+          else if lo<2 then [lhs(eq)=Sum(if lo=0 then Epsilon else first(rhs(eq)), newsym),
+                             newsym =Prod(lhs(eq), first(rhs(eq)))]
+          else [lhs(eq)=Sum(apply('Prod, makelist(first(rhs(eq)), lo)), newsym),
+                newsym =Prod(lhs(eq), first(rhs(eq)))])
+        else [eq]),
+      spec))$
+
+_standard_form(expr) := scanmap(
+  lambda([expr],
+    if atom(expr) or op(expr)="=" then expr
+    else if op(expr)='Function then expr
+    else if op(expr)='lambda then expr
+    else block(
+      [nexpr],
+      nexpr: assoc(expr, map(reverse, new_spec)),
+      if nexpr=false then (
+        nexpr:gensym(),
+        new_spec: cons(nexpr=expr, new_spec)),
+      nexpr)),
+  expr,
+  bottomup)$
+
+_fix_prods(expr) := scanmap(
+  lambda([prt], if not(atom(prt)) and op(prt)='Prod then block(
+      [args:args(prt)],
+      if length(args)=2 then prt else
+      apply('Prod, [first(args), _fix_prods(rest(prt))]))
+    else prt),
+  expr,
+  'bottomup)$
+
+get_options(opts, n) := block(
+  [fixed_card_var: 1,
+   fixed_card: false,
+   fixed_card_lo: 0,
+   fixed_card_hi: n],
+  for o in opts do (
+    if atom(o) then sp_error("Wrong thing for option 1."),
+    if op(o)="=" then (
+      fixed_card_var:rat('u),
+      fixed_card:true,
+      if first(o)='card then (
+        fixed_card_lo: fixed_card_hi:second(o))
+      else if first(o)='min_card then (
+        fixed_card_lo: second(o))
+      else if first(o)='max_card then (
+        fixed_card_hi:second(o)))
+    else sp_error("Wrong thing for option 2.")),
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi])$
+
+load("opsubst");
+
+nice_disp(expr) :=
+  opsubst([CYCLE="[", PROD="[", SET="[", MSET="[", SEQ="[", FUN=lambda([x], x)], expr)$
+
+nice_disp1(expr) := subst(Epsilon=[], nice_disp(expr))$
+
+catalan_number(n) := binomial(2*n,n)/(n+1)$
+
+/*
+count_species(B, [B=Sum(x, Prod(B,B))], 10)-4862;
+
+count_species(B, [B=Sum(x, Prod(Prod(x,B),B))], 15)-429;
+
+count_species(B, [B=Sequence(x)], 7)-1;
+
+count_species(B, [B=Sequence(C), C=Sum(x,y,z)], 4)-3^4;
+
+count_species(C, [C=Sequence(Prod(a, Prod(C, b)))], 20)-16796;
+
+count_species(C, [C=Sequence(Sum(x,y))], 3)-2^3;
+
+count_species(C, [C=Multiset(Sum(x,y,Prod(x,y)))], 50)-676;
+
+count_species(C, [C=Multiset(x)], 1)-1;
+
+count_species(C, [C=Prod(x,Multiset(C))], 1)-1;
+
+Count_species(B, [C=Prod(x,B), B=Multiset(C)], 10)-1842;
+
+count_species(C, [C=Sum(x,Multiset(C, card=2))], 10)-98;
+
+count_species(C, [C=Sum(x,Multiset(C, min_card=2))], 10)-2312;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)))], 5)-2;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)))], 5)-2;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b),Prod(a,b)))], 5)-6;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)), card=2)], 4)-1;
+
+count_species(Alkyl, [Alkyl=Prod(C, Multiset(Alkyl, max_card=3))], 12) - 3057;
+
+count_species(C, [C=Cycle(Sum(x,y,Prod(x,y)))], 10) - 684;
+
+*/

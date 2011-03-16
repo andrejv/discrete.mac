@@ -1,0 +1,335 @@
+%%%
+%%% za primere: set_display(none)$ linel:60$.
+%%%
+
+\documentclass[11pt]{article}
+
+\usepackage[a4paper]{geometry}
+\usepackage{graphicx}
+\usepackage{fancyvrb}
+
+\usepackage{mathpazo}
+\linespread{1.05}
+
+\usepackage{tikz}
+\usetikzlibrary{decorations.pathmorphing}
+\tikzstyle{every node}=[fill=white,draw=black,shape=circle,inner sep=1mm]
+
+\newcommand{\command}[1]{\texttt{#1}}
+\newcommand{\maxima}{\textsc{Maxima}}
+\newcommand{\species}[1]{\mathcal{#1}}
+\newcommand{\DEF}[1]{{\em #1}}
+
+\newtheorem{theorem}{Theorem}
+
+\DefineVerbatimEnvironment{example}{Verbatim}{%
+	frame=leftline,%
+	rulecolor=\color{gray},%
+	framerule=2pt,%
+	framesep=3mm}
+
+\begin{document}
+
+\title{\texttt{discrete.mac}: a list of functions}
+\author{Andrej Vodopivec\\ \texttt{andrej.vodopivec@gmail.com}}
+\date{}
+\maketitle
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Number theory}
+
+\begin{description}
+  \item[chinese\_remainder(a\_lst, m\_lst):] solves the system of
+    congruences
+    \begin{eqnarray*}
+      x & \equiv & a_1 \pmod{m_1} \\
+      x & \equiv & a_2 \pmod{m_2} \\
+        & \vdots &                 \\
+      x & \equiv & a_k \pmod{m_k}
+    \end{eqnarray*}
+    The function returns $[x_0,M]$ such that every $x$, $x\equiv
+    x_o\pmod{M}$, is a solution for the system of congruences.
+  \item[divisiblep(a,b):] checks if $a$ divides $b$.
+  \item[solve\_lde(eqn):] solves a linear diophantine equation $eqn$.
+  \item[int\_digits(n):] returns the list of digits of the integer
+    $n$.
+  \item[num\_digits(b):] returns the number of digits of the integer
+    $n$.
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Graph theory}
+
+The package \verb|discrete.mac| loads the package \verb|graphs| which
+is included with \maxima. It adds the following graph theory
+functions.
+
+\begin{description}
+  \item [binary\_tree(n):] returns a binary tree of depth $n$.
+  \item [find\_k\_cycles(k, g):] returns a list of all cycles of
+    length $k$ in the graph $g$.
+  \item [find\_k\_paths(k, g):] returns a list of all paths of length
+    $k$ in the graph $g$.
+  \item [flow\_poly(g):] uses the external program \verb|tutte| to
+    compute the flow polynomial of the graph $g$.
+  \item [from\_degree\_sequence(lst):] construct a graph with degree
+    sequence \verb|lst|.
+  \item [graph\_automorphisms(g):] returns the group of automorphisms
+    of the graph $g$ as the set of permutations. The function accepts
+    two optional arguments. With \texttt{generators=true} it only
+    returns a set of generators for the automorphism group. With
+    \texttt{program=bliss} it uses an external program \texttt{bliss}
+    to compute the automorphism group. The location of the
+    \texttt{bliss} program should be specified in
+    \texttt{blissprogram} option variable.
+  \item [graph\_from\_lcf(lst):] returns the symmetric Hamiltonian
+    graph as specified by the lcf.
+  \item [graph\_generating\_function(n, t):] returns the generating
+    function for the number of graphs on $n$ vertices.
+  \item [number\_of\_graphs(n,m):] returns the number of graphs with
+    $n$ vertices and $m$ edges. If $m$ is not provided, all graphs on
+    $n$ vertices are returned.
+  \item [max\_clique\_cliquer(g):] uses the program \verb|cliquer| to
+    compute the maximum clique in the graph $g$. The location of the
+    program is specified in the option variable
+    \verb|cliquer_program|.
+  \item [max\_independent\_set\_cliquer(g):] uses the program
+    \verb|cliquer| to compute the maximum independent set in the graph
+    $g$.
+  \item [number\_of\_graphs(n, m):] returns the number of graphs on
+    $n$ vertices with $m$ edges.
+  \item [number\_of\_spanning\_trees(g):] returns the number of
+    spanning trees in the graph \verb|g|.
+  \item [permute\_vertices(g, p):] returns a new graph $h$ such
+    that the permutation $p$ is an isomorphism between $g$ and $h$.
+  \item [relabel\_graph\_vertices(g, option):] relabels the graph
+    vertices. Option is usually \verb|min_di=1|.
+  \item [tutte\_poly(g):] uses the external program \verb|tutte| to
+    compute the Tutte polynomial of the graph $g$. The location of the
+    program is specified in the option variable \verb|tutte_program|.
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Relations on finite sets}
+
+\begin{description}
+  \item[relation\_product(r1,r2,\ldots):] computes the product of
+    relations
+  \item[relation\_power(R,n):] computes the power relation $R^n$.
+  \item[identity\_relation(A):] returns the identity relation on the
+    set $A$.
+  \item[inverse\_relation(R):] returns the inverse relation of the
+    relation $R$.
+  \item[relation\_inverval(A,R,a,b):] returns the set of elements
+    $x\in A$ such that $a R x R b$.
+  \item[graph\_of\_relation(R, A):] returns the graph of the relation
+    $R$ on the set $A$ (note that the graph is simple, the loops $xRx$
+    are missing from the graph).
+  \item[draw\_graph\_of\_relation(R, A):] draws the graph of the
+    relation $R$ on the set $A$ (the loops $xRx$ will be drawn on the
+    graph).
+  \item[antisymmetric\_relationp(R):] checks if the relation is
+    antisymmetric.
+  \item[reflexive\_relationp(R):] checks if the relation is reflexive.
+  \item[symmetric\_relationp(R):] checks if the relation is symmetric.
+  \item[tranzitive\_relationp(R):] checks if the relation is
+    tranzitive.
+  \item[equivalence\_relationp(R, A):] checks if the relation is an
+    equivalence relation.
+  \item[equivalence\_classes(R):] returns the set of equivalence
+    classes of the equivalence relation $R$.
+  \item[partial\_order\_relationp(R, A):] checks if the relation $R$
+    is a partial order on the set $A$.
+  \item[hasse\_diagram(R):] returns the graph which represents the
+    Hasse diagram for the relation $R$ (which should be a partial
+    order).
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Permutations and permutation groups}
+
+\subsection{Permutations}
+
+\begin{description}
+  \item [identity\_permutation(n):] returns the identity permutation
+    of $n$ elements.
+  \item [inverse\_permutation(p):] returns the inverse permutation of
+    the permutation $p$.
+  \item [random\_permutation1(n):] returns a random permutation of the
+    list $[1,2,\ldots,n]$.
+  \item [permutation\_product(p1, p2,...):] computes the product of
+    permutations.
+  \item [permutation\_power(p, n):] computes the power permutation
+    $p^n$ of the permutation $p$.
+  \item [permutation\_to\_cycles(p):] returns the permutation $p$ as a
+    product of disjoint cycles.
+  \item [permutation\_from\_cycles(cl, n):] returns the product of
+    disjoint cycles as a permutation.
+  \item [permutation\_cycle\_structure(p):] returns the cycle
+    structure of the permutation $p$.
+  \item [permutation\_to\_transpositions(p):] returns the permutation
+    $p$ as a product of transpositions.
+  \item [permutation\_from\_transpositions(tl, n):] returns the
+    product of transpositions as a permutation.
+  \item [permutation\_sign(p):] returns the parity of the permutation
+    $p$.
+  \item [permutation\_order(p):] returns the order of the permutation
+    $p$.
+  \item [permute\_list(p, l):] permutes the list $l$ according to the
+    permutation $p$.
+  \item [permutation\_fixed\_points(p):] returns the set of fixed
+    points of the permutation $p$.
+  \item [permutation\_matrix(p):] returns the permutation $p$ as a
+    permutation matrix.
+  \item [number\_of\_inversions(p):] returns the number of inversions
+    in the permutation $p$.
+\end{description}
+
+\subsection{Permutation groups}
+
+\begin{description}
+  \item [permutation\_group\_p(grp):] checks if the set of
+    permutations $grp$ is a permutation group.
+  \item [group\_action(grp, st):] computes a permutation group on $st$
+    which is defined by the action of $grp$ on $st$.
+  \item [group\_from\_generators(grp):] returns the set of permutation
+    of the group defined by generators in $grp$.
+  \item [group\_sgs(grp):] computes a strong generating set for the
+    group defined by generators in $grp$.
+  \item [group\_stabilizer(elt, grp):] returns the stabilizer group of
+    the element $elt$ ($elt$ can be a list of elements).
+  \item [group\_permutation(grp, elt1, elt2):] returns a permutation
+    $p$ in the group defined by generators in $grp$ which sends $elt1$
+    to $elt2$.
+  \item [group\_memberp(perm, grp):] tests if the permutation $perm$
+    is contained in the group defined by generators in $grp$.
+  \item [group\_orbit(elt, grp):] returns the orbit of the element $elt$.
+  \item [group\_orbits(grp):] returns all orbits of the group $grp$.
+  \item [group\_orbit\_representatives(grp):] returns the
+    representatives of group orbits of $grp$.
+  \item [goup\_order(grp):] computes the order of the group defined by
+    generators in $grp$.
+  \item [group\_fixed\_pointp(elt, grp):] tests if $elt$ is a fixed
+    point for all permutations in the group $grp$.
+  \item [group\_action(grp, set):] computes the action of the group
+    $grp$ on the set $set$.
+  \item [symmetric\_group(n):] returns the symmetric group on $n$
+    elements.
+  \item [alternating\_group(n):] returns the alternating group on $n$
+    elements.
+  \item [cyclic\_group(n):] returns the cyclic group on $n$ elements.
+  \item [dihedral\_group(n):] returns the dihedral group on $n$
+    elements.
+  \item [multiplication\_table(grp):] returns a matrix which
+    represents the multiplication table for the group $grp$.
+  \item [reduce\_generator\_set(grp):] returns a possibly smaller set
+    of generators for the group defined by generators in $grp$.
+\end{description}
+
+\subsection{P\'olya theory}
+
+\begin{description}
+  \item [cycle\_index\_permutation(p):] computes the cycle index of
+    the permutation $p$.
+  \item [cycle\_index\_group(grp):] computes the cycle index of the
+    group $grp$.
+  \item [cycle\_index\_symmetric(n):] computes the cycle index of the
+    symmetric group on $n$ elements.
+  \item [cycle\_index\_dihedral(n):] computes the cycle index of the
+    dihedral group on $n$ elements.
+  \item [cycle\_index\_cyclic(n):] computes the cycle index of the
+    cyclic group on $n$ elements.
+  \item [cycle\_index\_graph\_vertices(g):] returns the cycle index of
+    the automorphism group of the graph $g$ which acts on the vertices
+    of $g$.
+  \item [cycle\_index\_graph\_edges(g):] returns the cycle index of
+    the automorphism group of the graph $g$ which acts on the edges of
+    $g$.
+  \item [subst\_inventory(inv, ci):] substitutes the appropriate
+    inventory into the cycle index $ci$.
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Combinatorial species}
+
+\subsection{Constructions}
+\begin{description}
+  \item[Prod(A, B):] the product species $A$ and $B$.
+  \item[Sum(A, B):] the sum of species $A$ and $B$.
+  \item[Set(A):] the species of sets with elements in $A$.
+  \item[MSet(A):] the species of multisets with elements in $A$.
+  \item[Seq(A):] the species of sequences with elements in $A$.
+  \item[Cycle(A):] the species of cycles with elements in $A$.
+  \item[Function(fun):] the number of elements of size $n$ is computed
+    with the function \texttt{fun}.
+  \item[Epsilon:] a special element of size 0.
+\end{description}
+%
+The constructions \texttt{Set}, \texttt{MSet}, \texttt{Seq} and
+\texttt{Cycle} accept an optional argument \texttt{card},
+\texttt{min\_card} or \texttt{max\_card}.
+
+\subsection{Functions}
+
+\begin{description}
+  \item[count\_species(A, spec, n):] counts the number of elements of
+    size $n$ in the species $A$ which is defines with specification
+    $spec$.
+  \item[list\_species(A, spec, n):] returns the list of elements of
+    size $n$ in the species $A$ which is defines with specification
+    $spec$.
+  \item[select\_from\_species(A, spec, n):] returns a random element
+    size $n$ in the species $A$ which is defines with specification
+    $spec$.
+  \item[gf\_equations(spec, t):] return the generating functions for
+    species defined in $spec$ in variable $t$.
+  \item[gf\_express(eqs, A(t)):] find the algebraic equation for the
+    generating function $A(t)$ defines with a system of equations
+    $eqs$. Usually $eqs$ is obtained with \texttt{gf\_equations}.
+  \item[alg\_eq\_to\_rec(eq, A(t)):] find the recurrence for the
+    coefficients in the generating function $A(t)$ for which there
+    exists an algebraic equation $eq$. Usually $eq$ is obtained with
+    \texttt{gf\_express}.
+   \item[nice\_disp:] nicely displays an element of a combinatorial
+   	species. Replaces construction operators with lists.
+   \item[nice\_disp1:] like \verb|nice_disp| but replaces Epsilon with
+   	an empty list.
+\end{description}
+
+\section{Other functions}
+
+\begin{description}
+  \item [number\_of\_derangements(n):] returns the number of
+    derangements of $n$ elements.
+  \item [mcoeff(expr, v1, p1, v2, p2,$\ldots$):] computes the
+    coefficient of the monomial $v1^{p1}v2^{p2}\cdots$ in the
+    expression $expr$.
+  \item [necklace\_polynomial(n, x):] returns the necklace polynomial
+    of degree $n$ in the variable $x$. An optional argument
+    \texttt{dihedral=true} can be provided.
+  \item [list\_necklaces(n, lst):] returns the set of necklaces with
+    $n$ beads with colors from $lst$. An optional argument
+    \texttt{dihedral=true} can be provided.
+  \item [rook\_polynomial(M, x):] returns the rook polynomial of the
+    board defined by the 0--1 matrix $M$ in the variable $x$.
+  \item [nth\_subset(n, st):] returns the $n$--th subset of the set
+    $st$.
+  \item [random\_subset(st):] returns a random subset of the set $st$.
+  \item [random\_choice(lst):] returns a random element from the list
+    $lst$.
+  \item [random\_choice\_n(lst, n):] returns $n$ random elements from
+    the list $lst$.
+  \item [count(elt, lst):] counts the number of times that $elt$
+    appears in the list $lst$.
+  \item [int\_range(a b, c):] returns the integers from $a$ to $b$ by
+    step $c$. If $c$ is omitted, the step is 1. If $b$ and $c$ are
+    omitted, it returns the integers from 1 to $a$ by step 1.
+\end{description}
+
+\end{document}

@@ -1,0 +1,1223 @@
+/*********************************************************************
+ *********************************************************************
+ ***                                                               ***
+ ***                 ~*~  DISCRETE  ~*~                            ***
+ ***                                                               ***
+ ***  A package with functions for combinatorics.                  ***
+ ***                                                               ***
+ ***   - Graphs using the GRAPHS package                           ***
+ ***   - Graph automorphism groups using the bliss program         ***
+ ***   - Relations on finite sets                                  ***
+ ***   - Permutations and permutation groups,                      ***
+ ***     random Schreier-Sims algorithm, cycle indices,            ***
+ ***     Polya counting theory                                     ***
+ ***   - Combinatorial species using the Species package           ***
+ ***   - Number theory: solve_lde, chinese_remainder               ***
+ ***                                                               ***
+ ***                                                               ***
+ ***  Author:  Andrej Vodopivec <andrej.vodopivec@gmail.com>       ***
+ ***  Licence: GPL                                                 ***
+ **                                                                ***
+ *********************************************************************/
+
+if get('graphs, 'version)=false then load(graphs)$
+if get('Species, 'version)=false then load(Species)$
+
+put('discrete, 1, 'version)$
+
+number_of_spanning_trees(g) :=
+  block([ratmx:true],
+    determinant(minor(laplacian_matrix(g), 1, 1)))$
+
+from_degree_sequence(lst) := _from_degree_sequence_sorted(reverse(sort(lst)))$
+_from_degree_sequence_sorted(lst) := 
+  if lst=[] then empty_graph(0)
+  else if lmin(lst)<0 then error("Not a graphic sequence")
+  else if lmax(lst)=0 then empty_graph(length(lst))
+  else block(
+    [n, v, lst1, g, added:[]],
+    v: first(lst),
+    lst1: rest(lst),
+    if v>length(lst1) then error("Not a graphic sequence"),
+    for i:1 thru v do lst1[i]:lst1[i]-1,
+    lst1: makelist([lst1[i], i], i, 1, length(lst1)),
+    lst1: sort(lst1, lambda([a,b], is(first(a)>first(b)))),
+    added: map('second, lst1),
+    lst1: map('first, lst1),
+    g: _from_degree_sequence_sorted(lst1),
+    n: graph_order(g),
+    add_vertex(n, g),
+    for i:1 thru length(added) do
+      if added[i]<=v then
+        add_edge([n,n-i], g),
+    g)$
+
+relabel_graph_vertices(gr, [options]) := block(
+  [min_id: assoc('min_id, options, 0),
+  new_ids: hash_table(), vrt:[], edg:[]],
+  for v in vertices(gr) do (
+    set_hash(v, new_ids, min_id),
+    vrt: cons(min_id, vrt),
+    min_id: min_id+1),
+  for e in edges(gr) do
+  edg: cons([get_hash(e[1], new_ids), get_hash(e[2], new_ids)], edg),
+  create_graph(vrt, edg, directed=is_digraph(gr)))$
+
+permute_vertices(gr, perm) := block(
+  [names:hash_table(), i:1, rnames:hash_table(), edg:[]],
+  for v in sort(vertices(gr)) do (
+    set_hash(v, names, i),
+    set_hash(i, rnames, v),
+    i:i+1),
+  for e in edges(gr) do
+    edg: cons([
+        get_hash( perm[get_hash(e[1], names)], rnames ),
+        get_hash( perm[get_hash(e[2], names)], rnames )
+      ], edg),
+  create_graph(vertices(gr), edg, directed=is_digraph(gr)))$
+
+binary_tree(n) :=
+  if n=1 then create_graph(3, [[0,1],[0,2]])
+  else block([t:binary_tree(n-1), e: empty_graph(1), g, n],
+    g: graph_union(e, t, t),
+    add_edges([[0,1], [0, graph_order(t)+1]], g),
+    g,
+    set_positions(_binary_tree_positions(g, 0, 0, 1, 0), g),
+    g)$
+
+_binary_tree_positions(tree, root, xmin, xmax, ypos) :=
+  if vertex_degree(root, tree)=1 then [[root, [(xmin+xmax)/2.0, ypos]]]
+  else block(
+    [branches: neighbors(root, tree)],
+    branches: sublist(branches, lambda([x], is(x>root))),
+    append([[root, [(xmin+xmax)/2.0, ypos]]],
+      _binary_tree_positions(tree, branches[1], xmin, (xmin+xmax)/2.0, ypos-1.0),
+      _binary_tree_positions(tree, branches[2], (xmin+xmax)/2.0, xmax, ypos-1.0)))$
+
+
+define_variable(cliquer_program, "/Users/drasko/Projects/cliquer-1.21/cl", any);
+max_clique_cliquer(g) := block(
+  [in_file: concat(maxima_tempdir, "/gr.dim"),
+   out_file: concat(maxima_tempdir, "/gr.out"),
+   fstream, line, command],
+  command: concat(cliquer_program, " -q -q ", in_file, " > ", out_file),
+  dimacs_export(g, in_file),
+  system(command),
+  fstream: openr(out_file),
+  line: readline(fstream),
+  close(fstream),
+  line: rest(tokens(line), 2),
+  map(?parse\-integer, line))$
+
+max_independent_set_cliquer(g) := max_clique_cliquer(complement_graph(g))$
+
+tutte_program: "Projects/tuttepoly-v0.9.13/tutte/tutte"$
+tutte_poly(g) := block(
+  [file_in: concat(maxima_tempdir, "/gr.edge"),
+   file_out: concat(maxima_tempdir, "/gr.out"),
+   fw, cmd, tpl],
+  fw: openw(file_in),
+  printf(fw, "~{~{~a--~a~}~^,~}~%", edges(relabel_graph_vertices(g, min_id=0))),
+  close(fw),
+  cmd: sconcat(tutte_program, " ", file_in, " > ", file_out),
+  system(cmd),
+  fw: openr(file_out),
+  readline(fw),
+  tp: readline(fw),
+  close(fw),
+  tp: substring(tp,10,slength(tp)-1),
+  eval_string(tp))$
+
+flow_poly(g):=block([n:graph_order(g),m:graph_size(g)],
+  (-1)^(1-n+m)*ratexpand(psubst(['y =1-'x,'x=0], tutte_poly(g))))$
+
+graph_from_lcf(lst) := block(
+  [n, g, edg:[], i:0],
+  if length(lst)=2 and listp(first(lst)) then (
+    lst: flatten(makelist(first(lst), second(lst)))),
+  n: length(lst),
+  g: cycle_graph(n),
+  for s in lst do (
+    s: mod(s+i, n),
+    if i<s then edg:cons([i,s], edg),
+    i:i+1),
+  add_edges(edg, g),
+  g)$
+
+find_k_cycles(k, g) :=
+  if k<3 then []
+  else sublist(
+    _extend_k_paths(k-1, g, map("[", vertices(g))),
+    lambda([c],
+      is(first(c)=lmin(c) and
+        second(c) < last(c) and
+        is_edge_in_graph([first(c), last(c)], g))))$
+
+find_k_paths(k, g) := sublist(
+  _extend_k_paths(k, g, map("[", vertices(g))),
+  lambda([l], is(first(l)<=last(l))))$
+
+_extend_k_paths(k, g, paths) :=
+  if k=0 then paths
+  else block(
+    [new_paths: []],
+    for p in paths do (
+      for v in neighbors(first(p), g) do (
+        if not member(v, p) then new_paths: cons(cons(v, p), new_paths))),
+    _extend_k_paths(k-1, g, new_paths))$
+
+is_hamiltonian(g) := is(length(hamilton_cycle(g))>0)$
+
+graph_to_latex(g) := block(
+  [pos: get_positions(g)],
+  printf(true, "\\begin{tikzpicture}[scale=1]~%"),
+  printf(true, "\\tikzstyle{every node}=[circle, draw, fill=white, inner sep=2pt]~%"),
+  printf(true, " \\draw~%"),
+  for e in edges(g) do (
+    printf(true, "  (~a, ~a) -- (~a, ~a)~%",
+      first(assoc(e[1], pos)),
+      second(assoc(e[1], pos)),
+      first(assoc(e[2], pos)),
+      second(assoc(e[2], pos)))),
+  for v in vertices(g) do (
+    printf(true, " (~a, ~a) node {}~%",
+      first(assoc(v, pos)),
+      second(assoc(v, pos)))),
+  printf(true, ";~%\\end{tikzpicture}~%"),
+  'done)$
+
+/***************************
+ *
+ * Functions for relations of finite sets.
+ *
+ ***************************/
+
+relation_product(r, [args]) :=
+  if length(args)=0 then r
+  else if length(args)=1 then _relation_product(r, args[1])
+  else relation_product(r, apply('relation_product, args))$
+
+_relation_product(R,S) := block(
+  [RS:[]],
+  for a in R do (
+    for b in S do (
+      if a[2]=b[1] then RS: cons([a[1], b[2]], RS))),
+  setify(RS))$
+
+identity_relation(A) := setify(create_list([x,x], x, listify(A)))$
+
+inverse_relation(R) := map(reverse, R)$
+
+relation_power(R, n) :=
+  if n<0 then relation_power(inverse_relation(R), -n)
+  else if n=0 then identity_relation(
+    setify(tree_reduce(append, listify(R))))
+  else if n=1 then R
+  else if evenp(n) then block(
+    [R1:relation_power(R, n/2)],
+    relation_product(R1, R1))
+  else
+    relation_product(R, relation_power(R, n-1))$
+
+relation_interval(A, R, a, b) := subset(A,
+  lambda([x],
+    is(
+      member([a,x], R) and
+      member([x,b], R))))$
+
+symmetric_relationp(R) := is(inverse_relation(R)=R)$
+
+antisymmetric_relationp(R, [A]) :=
+  subsetp(
+    intersection(R, inverse_relation(R)),
+    if length(A)=0 then
+      identity_relation(setify(tree_reduce(append, (listify(R)))))
+    else
+      identity_relation(first(A)))$
+
+tranzitive_relationp(R) := subsetp(relation_product(R, R), R)$
+
+reflexive_relationp(R, [A]) := 
+  subsetp(
+    if length(A)=0 then
+      identity_relation(setify(tree_reduce(append, listify(R))))
+    else
+      identity_relation(first(A)),
+    R)$
+
+graph_of_relation(R, [V]) := block(
+  [V: if length(V)=1 then V[1] else listify(setify(xreduce(append, listify(R)))), g],
+  g: make_graph(V, sublist(listify(R), lambda([x], is(x[1]#x[2]))), 'directed=true),
+  g)$
+
+draw_graph_of_relation(R, [V]) := block(
+  [V: if length(V)=1 then V[1] else listify(setify(xreduce(append, listify(R)))),
+   edges: sublist(listify(R), lambda([x], is(x[1]#x[2]))),
+   loops1: map(first, sublist(listify(R), lambda([x], is(x[1]=x[2])))),
+   loops:[], g],
+  g: make_graph(args(V), edges, 'directed=true),
+  for v in vertices(g) do (
+    if get_vertex_label(v,g)=false then set_vertex_label(v,v,g),
+    if member(get_vertex_label(v,g), loops1) then loops: cons(v, loops)),
+  draw_graph(g, 'loops=loops,
+    'program=circular_positions, 'head_length=0.07, 'head_angle=10,
+    'show_label=true, 'vertex_size=1, 'label_alignment='left, 'show_vertex_size=1))$
+
+equivalence_relationp(R, [A]) :=
+  tranzitive_relationp(R) and symmetric_relationp(R) and
+    (if length(A)=0 then reflexive_relationp(R) else reflexive_relationp(R, first(A)))$
+
+equivalence_classes(R) :=
+  if not equivalence_relationp(R) then error("Not a equivalence relation!")
+  else fullsetify(connected_components(underlying_graph(graph_of_relation(R))))$
+
+partial_order_relationp(R, [A]) := block(
+  [],
+  if length(A)=0 then A:setify(flatten(listify(first(R))))
+  else A:first(A),
+  tranzitive_relationp(R) and reflexive_relationp(R,A) and anyisymmetric_relationp(R,A))$
+
+hasse_diagram(g) := block(
+  [hg, vrt, edges:[], layer, next_layer, h:0, pos:[], new_edges],
+  if not is_digraph(g) then g: graph_of_relation(g),
+  vrt: setify(vertices(g)),
+  layer: subset(vrt, lambda([x], is(vertex_in_degree(x, g)=0))),
+  vrt: setdifference(vrt, layer),
+  while length(layer)>0 do (
+    for i:1 thru length(layer) do (
+      pos: cons([inpart(layer, i), [i*1/(length(layer)+1), h]], pos)),
+    h:h+1,
+    next_layer: subset(vrt,lambda([v],
+        is( intersection(vrt, setify(in_neighbors(v, g)))={} ))),
+    for v in next_layer do (
+      new_edges: sublist( in_neighbors(v, g), lambda([x], member(x, layer)) ),
+      new_edges: map(lambda([x], [x,v]), new_edges),
+      edges: append(new_edges, edges)),
+    layer: next_layer,
+    vrt: setdifference(vrt, next_layer)),
+  hg: create_graph(vertices(g), edges),
+  for v in vertices(g) do set_vertex_label(v, get_vertex_label(v, g), hg),
+  set_positions(pos, hg),
+  hg)$
+
+/***************************
+ *
+ * permutations and permutation groups
+ *
+ *   - Multiplication from left to right!
+ *
+ ***************************/
+
+define_variable(permutation_multiplication, 'left_to_right, any)$
+define_variable(large_groups, false, boolean)$
+
+random_permutation1(n) := random_permutation(int_range(n))$
+
+permutations1(n) := permutations(makelist(i,i,n))$
+
+permute_list(perm, lst) := makelist(lst[perm[i]], i, 1, length(lst))$
+
+number_of_inversions(p) := block(
+  [noi:0],
+  while length(p)>0 do (
+    for pj in rest(p) do
+      if pj<first(p) then noi: noi+1,
+        p: rest(p)),
+  noi)$
+
+permutation_matrix(perm) := block(
+  [n: length(perm)],
+  genmatrix(lambda([i,j], if perm[i]=j then 1 else 0), n, n))$
+
+permutation_product(p, [args]) :=
+  if length(args)=0 then p
+  else if length(args)=1 then  block(
+    [q:args[1]],
+    if length(p)#length(q) then error("Permutations not compatible"),
+    if permutation_multiplication='right_to_left then
+      makelist(p[q[i]],i,1,length(p))
+    else
+      makelist(q[p[i]],i,1,length(p)))
+  else permutation_product(p, apply('permutation_product, args))$
+
+inverse_permutation(p) := block(
+  [ip:makelist(i, i, 1, length(p))],
+  for i:1 thru length(p) do ip[p[i]] : i,
+  ip)$
+
+permutation_power(p, n) :=
+  if n<0 then permutation_power(inverse_permutation(p),-n)
+  else if n=0 then makelist(i, i, 1, length(p))
+  else if n=1 then p
+  else if evenp(n) then block(
+    [p1 : permutation_power(p, n/2)],
+    permutation_product(p1, p1))
+  else block(
+    [p1 : permutation_power(p, (n-1)/2)],
+    permutation_product(p1, p1, p))$
+
+permutation_from_cycles(cl, [n]) := block(
+  [p],
+  if length(n)=1 then n:first(n) else n:lmax(flatten(cl)),
+  p: makelist(i, i, 1, n),
+  for c in cl do (
+    for i:1 thru length(c)-1 do p[c[i]] : p[c[i+1]],
+    p[c[length(c)]] : c[1]),
+  p)$
+
+permutation_to_cycles(p) := block(
+  [used : makelist(0, i, 1, length(p)), cycles : []],
+  for i:1 thru length(p) do (
+    if used[i]=0 then
+      if p[i]#i then block(
+        [c : [], j:i],
+        while used[j]=0 do (
+          used[j]:1,
+          c : cons(j, c),
+          j : p[j]),
+        cycles : cons(reverse(c), cycles))),
+  reverse(cycles))$
+
+permutation_to_transpositions(p) := block(
+  [cycles: permutation_to_cycles(p)],
+  xreduce('append,
+    map(lambda([c],
+        if length(c)<3 then [c]
+        else block(
+          [c1: first(c), cr: rest(c)],
+          makelist([c1, x_], x_, cr))),
+      cycles)))$
+
+permutation_from_transpositions(tr, [n]) := block(
+  [p],
+  if length(n)=1 then n:n[1] else n:lmax(flatten(tr)),
+  p: makelist(i,i,n),
+  for t in tr do
+    p: psubst([t[1]=t[2], t[2]=t[1]], p),
+  p)$
+
+permutation_sign(p) := block(
+  [c:permutation_to_cycles(p)],
+  c: apply("+", map(length, c)) - length(c),
+  if evenp(c) then 1 else -1)$
+
+permutation_fixed_points(p) := block(
+  [p1:p, i:1, fp:[]],
+  while p1#[] do (
+    if first(p1)=i then fp: cons(i, fp),
+    i:i+1, p1:rest(p1)),
+  setify(fp))$
+
+permutation_order(p) := block(
+  [ci: permutation_to_cycles(p)],
+  if ci=[] then 0
+  else xreduce(lcm, map(length, ci)))$
+
+permutation_cycle_structure(p) := map(length, permutation_to_cycles(p))$
+
+number_of_derangements(n) := n!*sum((-1)^i/i!,i,0,n)$
+
+/******************
+ *
+ * GROUPS: a group is represented as a set of permutations!
+ *
+ ******************/
+
+multiplication_table(grp) := block(
+  [s: makelist(part(grp,i)=i, i, 1, length(grp))],
+  [map(reverse, s),
+  subst(s,
+    genmatrix(lambda([i,j], 
+        permutation_product(part(grp, i), part(grp, j))),
+      length(grp), length(grp)))])$
+
+/******************
+ * permutation_group_p: check if group * group^-1 subset group.
+ ******************/
+permutation_group_p(group) := block(
+  [mlt: create_list(permutation_product(p1, inverse_permutation(p2)),
+	p1, listify(group), p2, listify(group))],
+  is (setdifference(setify(mlt), group)={}))$
+
+_group_stabilizer_list(elt, group, [options]) :=
+  if _sgsp(group) then _group_stabilizer_group(elt, second(group), 'generators=true)
+  else if assoc('generators, options, large_groups)=true then block(
+    [stab: group],
+    for e in elt do
+      stab: group_stabilizer(e, stab, 'generators=true),
+    stab)
+  else block(
+    [stab: group],
+    for e in elt do
+      stab: subset(stab, lambda([p], is(p[e]=e))),
+    stab)$
+
+group_stabilizer(elt, group, [options]) :=
+  if listp(elt) then apply(_group_stabilizer_list, append([elt, group], options))
+  else if _sgsp(group) then group_stabilizer(elt, reduce_generator_set(second(group)), 'generators=true)
+  else if assoc('generators, options, large_groups)=true then block(
+    [orb:[elt], new_elts:makelist(p[elt],p,listify(group)),
+     visited: hash_table(), transversal: hash_table(),
+     transversal_data, st_gens:[], i:0],
+    set_hash(elt, transversal, makelist(i, i, length(first(group)))),
+    for g in group do
+      set_hash(g[elt], transversal, g),
+    while length(new_elts)>0 do block(
+      [next_layer:[]],
+      orb: append(orb, new_elts),
+      for g_ in group do (
+        for x_ in new_elts do block(
+          [new_x : g_[x_]],
+          if get_hash(new_x, visited, false)=false then (
+            set_hash(new_x, visited, true),
+            set_hash(new_x, transversal, permutation_product(get_hash(x_, transversal), g_)),
+            next_layer: cons(new_x, next_layer)))),
+      new_elts: next_layer),
+    orb: setify(orb),
+    transversal_data: map('second, hash_table_data(transversal)),
+    for g in group do (
+      for r in transversal_data do block(
+        [rg: permutation_product(r, g), rg1],
+        rg1: inverse_permutation(get_hash(rg[elt], transversal)),
+        st_gens: cons(permutation_product(rg, rg1), st_gens))),
+    setify(st_gens))
+  else
+    subset(group, lambda([p], is (p[elt]=elt) ))$
+
+identity_permutation(n) := makelist(i,i,n)$
+
+group_permutation(group, elt1, elt2) := block(
+  [new_elts:makelist(p[elt1],p,listify(group)),
+   prev: hash_table(), found:false],
+  set_hash(elt1, prev, identity_permutation(length(first(group)))),
+  for p in group do set_hash(p[elt1], prev, p),
+  while length(new_elts)>0 and not found do block(
+    [next_layer:[]],
+    for g_ in group do (
+      for x_ in new_elts do block(
+        [new_x : g_[x_]],
+        if new_x=elt2 then found:true,
+        if get_hash(new_x, prev, false)=false then (
+          set_hash(new_x, prev, permutation_product(get_hash(x_, prev), g_)),
+          next_layer: cons(new_x, next_layer)))),
+    new_elts: next_layer),
+  get_hash(elt2, prev))$
+
+group_memberp(perm, grp) :=
+  if _sgsp(grp) then _group_memberp_sgs(perm, grp)
+  /*else if length(first(grp))>15 then _group_memberp_sgs(perm, group_sgs(grp))*/
+  else block(
+    [n: length(first(grp)), found:false, p, memb:true, i_n],
+    i_n: identity_permutation(n),
+    for i:1 thru n while not found do (
+      if perm[i]#i then (
+        p: group_permutation(grp, i, perm[i]),
+        if p=false then (
+          found: true,
+          memb: false)
+        else (
+          perm: permutation_product(perm, inverse_permutation(p)),
+          if perm=i_n then found:true,
+          if length(grp)=1 and first(grp)=i_n then (
+            found: true,
+            if perm#i_n then memb:false),
+          if member(perm, grp) then found:true)),
+      grp: reduce_generator_set(group_stabilizer(i, grp, 'generators=true))),
+    memb)$
+
+group_orbit(elt, group, [options]) :=
+  if _sgsp(group) then group_orbit(elt, second(group), 'generators=true)
+  else if assoc('generators, options, large_groups) = true then block(
+    [orb:[elt], new_elts, action, visited: hash_table()],
+    action: assoc('action, options, lambda([p, elt], p[elt])),
+    new_elts: makelist(action(p, elt),p,listify(group)),
+    while length(new_elts)>0 do block(
+      [next_layer:[]],
+      orb: append(orb, new_elts),
+      for g_ in group do (
+        for x_ in new_elts do block(
+          [new_x : action(g_, x_)],
+          if get_hash(new_x, visited, false)=false then (
+            set_hash(new_x, visited, true),
+            next_layer: cons(new_x, next_layer)))),
+      new_elts: next_layer),
+    setify(orb))
+  else block(
+    [action: assoc('action, options, false)],
+    if action=false then (
+      if integerp(elt) then action: lambda([p, elt], p[elt])
+      else action: lambda([p, elt], map(lambda([x], p[x]), elt))),
+    setify(makelist(action(p, elt), p, listify(group))))$
+
+group_orbits(grp, [options]) :=
+  if _sgsp(grp) then group_orbits(second(grp), 'generators=true)
+  else block(
+    [generators: assoc('generators, options, large_groups), vrt, orbits:{},
+     action: assoc('action, options)],
+    vrt: assoc('set, options),
+    if listp(vrt) then vrt: setify(vrt),
+    if vrt=false then vrt: setify(first(grp)),
+    while length(vrt)>0 do block(
+      [orbit: group_orbit(first(vrt), grp, 'generators=generators, 'action=action)],
+      vrt: setdifference(vrt, orbit),
+      orbits: cons(
+        if assoc('representatives, options, false)=true then first(orbit) else orbit,
+        orbits)),
+    orbits)$
+
+group_orbit_representatives(grp, [options]) :=
+  apply(group_orbits, append([grp, 'representatives=true], options))$
+
+group_fixed_pointp(elt, grp) :=
+  if _sgsp(grp) then group_fixed_pointp(elt, second(grp))
+  else block(
+    [fp:true],
+    for p in grp while fp do
+      if p[elt]#elt then fp:false,
+    fp)$
+
+reduce_generator_set(lst) := block(
+  [newlst:[], n, arr],
+  n: length(first(lst)),
+  arr: hash_table(),
+  for p in lst do block(
+    [added:false],
+    for i:1 thru n while not added do block(
+      [pi: p[i]],
+      if pi#i then (
+        if get_hash(string([i,pi]), arr, false)#false then (
+          p: permutation_product(p, inverse_permutation(get_hash(string([i,pi]), arr))))
+        else (
+          set_hash(string([i,pi]), arr, p),
+          newlst: cons(p, newlst),
+          added: true)))),
+  if length(newlst)=0 then {identity_permutation(n)}
+  else setify(newlst))$
+
+group_order(generators) :=
+  if _sgsp(generators) then apply(_group_order_sgs, generators)
+  /*else if length(first(generators))>15 then apply(_group_order_sgs, group_sgs(generators))*/
+  else block(
+    [elements: first(generators), order: 1, n:length(first(generators)), ident_n],
+    ident_n: makelist(i,i,n),
+    for e in elements while length(delete(ident_n, generators))>0 do
+      if not group_fixed_pointp(e, generators) then block(
+        [orbit: group_orbit(e, generators, 'generators=true)],
+        order: order*length(orbit),
+        generators: reduce_generator_set(group_stabilizer(e, generators, 'generators=true))),
+    order)$
+
+symmetric_group(n,[options]) :=
+  if assoc('generators, options, large_groups)=true then
+    {append([n], makelist(i,i,n-1)),
+     append([2,1], makelist(i,i,3,n))}
+  else permutations(makelist(i,i,1,n))$
+
+alternating_group(n,[options]) := 
+  if assoc('generators, options, large_groups)=true then (
+    if evenp(n) then {permutation_from_cycles([[1,2,3]], n), permutation_from_cycles([makelist(i,i,2,n)], n)}
+	else {permutation_from_cycles([[1,2,3]], n), permutation_from_cycles([makelist(i,i,1,n)], n)})
+  else subset(
+    symmetric_group(n),
+    lambda([p], evenp(lsum(x-1, x, map(length, permutation_to_cycles(p))))))$
+
+cyclic_group(n, [options]) :=
+  if assoc('generators, options, large_groups)=true then {cons(n, makelist(i,i,1,n-1))}
+  else group_from_generators({cons(n, makelist(i,i,1,n-1))})$
+
+dihedral_group(n, [options]) := block(
+  [p1: cons(n, makelist(i,i,1,n-1)),
+   p2: cons(1, reverse(makelist(i,i,2,n)))],
+  if assoc('generators, options, large_groups) = true then {p1, p2}
+  else group_from_generators({p1, p2}))$
+
+/****************
+ * group_from_generators: find a BFS tree from the identity
+ *  using the generators.
+ ****************/
+group_from_generators(lst) := block(
+  [grp:[], new_elts:[makelist(i,i,1,length(first(lst)))],
+   visited: hash_table()],
+  while length(new_elts)>0 do block(
+    [next_layer:[]],
+    grp: append(grp, new_elts),
+    for g_ in lst do (
+      for x_ in new_elts do block(
+        [new_x : permutation_product(g_,x_)],
+        if get_hash(new_x, visited, false)=false then (
+          set_hash(new_x, visited, true),
+          next_layer: cons(new_x, next_layer)))),
+    new_elts: next_layer),
+  setify(grp))$
+
+group_action(grp, st, [options]) := block(
+  [mping: makelist(inpart(st, i)=i, i, 1, length(st)), grp_st:{}, p, action],
+  action: assoc('action, options),
+  if action=false then (
+    if atom(first(st)) then action: lambda([p,e], p[e])
+    else action: lambda([p,e], map(lambda([x], p[x]), e))),
+  for p in grp do block(
+    [p_st: makelist(i,i,1,length(st)), i:1],
+    for a in st do block(
+      [b: action(p, a)],
+      p_st[i]: assoc(b, mping),
+      i:i+1),
+    grp_st: cons(p_st, grp_st)),
+  grp_st)$
+
+cayley_graph(grp, [s]) := (
+  if length(s)=1 then s:first(s)
+  else if _sgsp(grp) then (
+    s: second(grp),
+    grp: group_from_generators(s))
+  else (
+    s: grp,
+    grp: group_from_generators(s)),
+  make_graph(grp,
+    lambda([a,b], member(permutation_product(inverse_permutation(a), b), s)),
+    'directed=true))$
+
+cayley_graph_symmetric(grp, [s]) := (
+  if length(s)=1 then s:first(s)
+  else if _sgsp(grp) then (
+    s: setify(second(grp)),
+    grp: group_from_generators(s))
+  else (
+    s: grp,
+    grp: group_from_generators(s)),
+  s: union(s, map(inverse_permutation, s)),
+  make_graph(grp,
+    lambda([a,b], member(permutation_product(inverse_permutation(a), b), s))))$
+
+/***************************
+ *
+ * An implementation of a random Schreier-Sims algorithm.
+ *
+ ***************************/ 
+
+_strip_generator(g, B, S, deltas) := block(
+  [T:S,cont:true],
+  for b in B while cont do block(
+    [p: get_hash(string([b, g[b]]), deltas, false)],
+    if p=false then cont:false
+    else (
+      g: permutation_product(g, inverse_permutation(p)),
+      T: sublist(T, lambda([p_], is(p_[b]=b))))),
+  g)$
+
+_first_moved_point(p):=block(
+  [i:1,p1:p,fp],
+  while p1#[] do 
+    if first(p1)#i then (fp:i,p1:[])
+    else (i:i+1,p1:rest(p1)),
+  fp)$
+
+_compute_deltas(B, S) := block(
+  [n:length(first(S)), deltas:hash_table(), S:S],
+  for b in B do block(
+    [orb:[b], borb: sublist(S, lambda([p], is(p[b]#b)))],
+    set_hash(string([b,b]), deltas, identity_permutation(n)),
+    while length(orb)>0 do block(
+      [b1: first(orb)],
+      orb:rest(orb),
+      for s in borb do (
+        if get_hash(string([b, s[b1]]), deltas, false)=false then (
+          set_hash(string([b, s[b1]]), deltas, permutation_product(get_hash(string([b,b1]), deltas), s)),
+          orb: cons(s[b1], orb)))),
+    S: sublist(S, lambda([p], is(p[b]=b)))),
+  deltas)$
+
+_base_for_generators(X) := block(
+  [base:[_first_moved_point(first(X))]],
+  for p in X do block(
+    [fixesB: true],
+    for b in base do
+      if p[b]#b then fixedB:false,
+    if fixedB then base: cons(_first_moved_point(p), base)),
+  base)$
+
+group_sgs([args]) := apply(_random_schreier_sims, args)$
+_random_schreier_sims(X, [maxC]) := block(
+  [B, random_generators, nrg, n, S, C:0, deltas, i_n],
+  n: length(first(X)),
+  i_n: identity_permutation(n),
+  X: delete(i_n, X),
+  B: _base_for_generators(X),
+  random_generators: listify(map('copylist, X)),
+  if length(random_generators)<10 then
+  for i:1 thru 10 - length(random_generators) do
+    random_generators: cons(copylist(random_choice(X)), random_generators),
+  S: listify(map('copylist, X)),
+  if length(maxC)=1 then maxC:first(maxC) else maxC:50,
+  n:length(first(X)),
+  for i:1 thru 10 do
+  /*random_generators: cons(random_choice(X), random_generators),*/
+  nrg: length(random_generators),
+  for i:1 thru 10 do block(
+    [s,t,gs,gt],
+    t: s: random(nrg)+1,
+    while t=s do t: random(nrg)+1,
+    gs: random_generators[s],
+    gt: random_generators[t],
+    if random(2)=0 then gt: inverse_permutation(gt),
+    if random(2)=0 then [gt,gs]: [gs,gt],
+    random_generators[s]: permutation_product(gs,gt)),
+  deltas: _compute_deltas(B,S),
+  while C < maxC do block(
+    [s,t,g,gs,gt],
+    t: s: random(nrg)+1,
+    while t=s do t:random(nrg)+1,
+    gs: random_generators[s],
+    gt: random_generators[t],
+    if random(2)=0 then gt: inverse_permutation(gt),
+    if random(2)=0 then [gt,gs]: [gs,gt],
+    g: random_generators[s]: permutation_product(gs, gt),
+    g: _strip_generator(g, B, S, deltas),
+    if g#i_n then block(
+      [fixesB:true],
+      C:0,
+      S:cons(g, S),
+      for b in B while fixesB do
+        if g[b]#b then fixesB:false,
+      if fixesB then B: endcons(_first_moved_point(g), B),
+      deltas: _compute_deltas(B,S)),
+    C:C+1),
+  [B,S])$
+
+_sgsp(sgs) := length(sgs)=2 and listp(first(second(sgs)))$
+
+_group_order_sgs(B, S) := 
+  if length(B)=0 or length(S)=0 then 1
+  else block(
+    [b1: first(B), S1, S2],
+    S1: sublist(S, lambda([p_], is(p_[b1]=b1))),
+    S2: sublist(S, lambda([p_], is(p_[b1]#b1))),
+    length(group_orbit(b1, S, 'generators=true))*_group_order_sgs(rest(B), S1))$
+
+_group_memberp_sgs(perm, sgs) := block(
+  [B:first(sgs),S:second(sgs)],
+  is(_strip_generator(perm, B, S, _compute_deltas(B, S)) =
+     identity_permutation(length(perm))))$
+
+/***************************
+ *
+ * Graph automorphism groups - using bliss!
+ *
+ ***************************/
+
+define_variable(bliss_command, "/Users/drasko/Projects/bliss-0.50/bliss", any)$
+define_variable(graph_automorphisms_program, 'bliss, any)$
+if file_search("group.lisp")#false then (
+  graph_automorphisms_program: lisp,
+  load("group.lisp"))$
+
+_read_generators(file) := block(
+  [fstream: openr(file), line, gens:{}],
+  while (line: readline(fstream))#false do block(
+    [perm, p:[]],
+    perm: substring(line, 13, slength(line)),
+    perm: split(perm,")("),
+    for cyc in perm do (
+      cyc: split(cyc, ","),
+      p: cons(map(?parse\-integer, cyc), p)),
+    gens: cons(append(p), gens)),
+  close(fstream),
+  gens)$
+
+graph_automorphisms(g, [options]) := block(
+  [in_file: concat(maxima_tempdir, "/gr.dim"),
+   out_file: concat(maxima_tempdir, "/gr.out"),
+   command, n:graph_order(g),
+   str, file],
+  if lmin(vertices(g))#1 or lmax(vertices(g))#graph_order(g) then
+    g:relabel_graph_vertices(g, 'min_id=1),
+  if assoc('program, options, graph_automorphisms_program)='bliss then (
+    str: dimacs_export_string(g, in_file),
+    command: concat(
+      bliss_command,
+      if is_digraph(g) then " -directed" else "",
+      " -v=0 \"",
+      in_file,
+      "\" > \"",
+      out_file,
+      "\""),
+    if is_digraph(g) then str: ssubst("p edge", "p arc", str),
+    file: openw(in_file),
+    printf(file, str),
+    close(file),
+    system(command),
+    gens: _read_generators(out_file),
+    gens: map(lambda([%c], permutation_from_cycles(%c,n)), gens))
+  else gens: graph_automorphisms_gens(g),
+  if assoc('generators, options, largs_groups)=true then gens
+  else if length(gens)>0 then group_from_generators(gens)
+  else {makelist(i,i,1,n)})$
+
+/***************************
+ *
+ * General cycles indices
+ *
+ ***************************/
+ 
+cycle_index_cyclic(n, [var]) := (
+  if length(var)#1 then var:'x else var:first(var),
+  1/n*lsum(totient(k)*var[k]^(n/k),k,listify(divisors(n))))$
+
+cycle_index_dihedral(n, [var]) := (
+  if length(var)#1 then var:'x else var:first(var),
+  if oddp(n) then
+    cycle_index_cyclic(n, var)/2 + var[1]*var[2]^((n-1)/2)/2
+  else
+    cycle_index_cyclic(n, var)/2 + (var[1]^2*var[2]^((n-2)/2) + var[2]^(n/2))/4)$
+
+_symmetric_partitions(n) :=
+  map(reverse, _symmetric_partitions1(makelist(n-i+1,i,1,n), n))$
+
+_symmetric_partitions1(coefs, n) :=
+  if length(coefs)=1 then (
+    if mod(n, coefs[1])=0 then [[n/coefs[1]]]
+    else [])
+  else block(
+    [sp:[]],
+    for i:0 thru n/coefs[1] do (
+      sp : append(map(lambda([u], cons(i, u)),
+          _symmetric_partitions1(rest(coefs), n-i*coefs[1])),
+        sp)),
+    sp)$
+
+cycle_index_symmetric(n, [var]) := (
+  if length(var)#1 then var:'x else var:first(var),
+  lsum(product((var[k]/k)^(j[k])/j[k]!, k, 1, n), j, _symmetric_partitions(n)))$
+
+cycle_index_permutation(p, [var]) := block(
+  [ci, cp:permutation_to_cycles(p)],
+  if length(var)#1 then var:'x else var:first(var),
+  ci: var[1]^(length(p)-lsum(length(c),c,cp)),
+  for c in cp do ci:ci*var[length(c)],
+  ci)$
+
+cycle_index_group(grp, [var]) := (
+  if length(var)#1 then var:'x else var:first(var),
+  1/length(grp)*lsum(cycle_index_permutation(p, var),p,listify(grp)))$
+
+cycle_index_graph_vertices(g) := block(
+  [grp: graph_automorphisms(g)],
+  cycle_index_group(grp))$
+
+cycle_index_graph_edges(g) := block(
+  [h: relabel_graph_vertices(g, min_id=1),
+   grp: graph_automorphisms(g), edges],
+  edges: map(setify, edges(h)),
+  grp: group_action(grp,edges),
+  cycle_index_group(grp))$
+
+necklace_polynomial(n, x, [options]) :=
+  if assoc('dihedral, options, false)=true then
+    ratsimp(
+      1/(2*n)*(lsum(totient(d)*x^(n/d), d, listify(divisors(n))) +
+        (if oddp(n) then n*x^((n+1)/2) else n*(1+x)/2*x^(n/2))))
+  else
+    ratsimp(1/n*lsum(totient(d)*x^(n/d), d, listify(divisors(n))))$
+
+rook_polynomial(M, x) := block(
+  [n:length(M), m:length(first(M)), ii, jj, ij_found:false],
+  /* Find a free square */
+  for i:1 thru n while not ij_found do
+    for j:1 thru m while not ij_found do (
+      if M[i,j]=1 then (
+        ij_found:true,
+        ii:i,
+        jj:j)),
+  /* Use the expansion formula */
+  if ij_found then block(
+    [M1 : copymatrix(M), M2 : copymatrix(M), l],
+    M2[ii,jj]:0,
+    for l:1 thru n do M1[l,jj]:0,
+    for l:1 thru m do M1[ii,l]:0,
+    x*rook_polynomial(M1, x) + rook_polynomial(M2, x))
+  else 1)$
+
+mcoeff(expr, [args]) := block(
+  [coef: expr],
+  for a in args do (
+    if atom(a) then coef: coeff(coef, a)
+    else coef: coeff(coef, first(a), second(a))),
+  coef)$
+
+nth_subset(n, st) :=
+  if n=1 or length(st)=0 then {}
+  else if n>2^(length(st)-1) then
+    cons(first(st), nth_subset(n-2^(length(st)-1), rest(st)))
+  else nth_subset(n, rest(st))$
+
+random_subset(st) := nth_subset(random(2^length(st))+1, st)$
+
+random_choice(lst) := inpart(lst, random(length(lst))+1)$
+
+random_choice_n(lst, n) :=
+  if n=0 then apply(op(lst), [])
+  else block([elt: random_choice(lst)],
+    cons(elt, random_choice_n(delete(elt, lst), n-1)))$
+
+count(el, lst) :=
+  if length(lst)=0 then 0
+  else if first(lst)=el then 1+count(el, rest(lst))
+  else count(el, rest(lst))$
+
+int_range(a, [opts]) := block([l,h,s],
+  if length(opts)=0 then [l,h,s]:[1,a,1]
+  else if length(opts)=1 then [l,h,s]:[a,first(opts),1]
+  else if length(opts)=2 then [l,h,s]:cons(a,opts)
+  else error("int_range: Wrong number of arguments."),
+  makelist(i,i,l,h,s))$
+
+/****************************
+ *
+ * Symmetric group on pairs - graphs_generating_function
+ *
+ ***************************/
+
+_expr_to_cycles(expr) :=
+  if inpart(expr, 0) = "*" then lreduce(append, map(_expr_to_cycles, args(expr)))
+  else if inpart(expr, 0) = "^" then
+    apply(append, makelist(_expr_to_cycles(part(expr, 1)), i, 1, part(expr, 2)))
+  else if inpart(expr, 0) = 'x then [part(expr, 1)]
+  else error("Not a product")$
+
+_transform_structure(expr) :=
+  if part(expr, 0) = "+" then xreduce("+", map(_transform_structure, args(expr)))
+  else if part(expr, 0) = "/" then _transform_structure(num(expr))/denom(expr)
+  else block(
+    [cycles: _expr_to_cycles(expr), structure : 1, var:'x],
+    /* add structures from one cycle */
+    for c in cycles do (
+      if evenp(c) then
+        structure : var[c]^((c-2)/2)*var[c/2]*structure
+      else
+        structure : var[c]^((c-1)/2)*structure),
+    /* add structures from two cycles */
+    for i:1 thru length(cycles) do
+      for j:i+1 thru length(cycles) do block(
+        [c1: cycles[i], c2: cycles[j], l],
+        l: c1*c2/gcd(c1, c2),
+        structure : var[l]^(c1*c2/l)*structure),
+  structure)$
+
+_max_subvar_index(expr) :=
+  if atom(expr) then 0
+  else if subvarp(expr) then part(expr, 1)
+  else lmax(map(_max_subvar_index, args(expr)))$
+
+inventory(lst, n, [var]) := (
+  if length(var)#1 then var:'x else var:first(var),
+  if integerp(lst) then lst: makelist(1, i, 1, lst),
+  if not integerp(n) then n: _max_subvar_index(n),
+  makelist(var[i]=lsum(l^i, l, lst), i, 1, n))$
+
+subst_inventory(inv, ci) :=
+  ratexpand(subst(inventory(inv, ci), ci))$
+
+mcoeff(expr, [opts]) :=
+  if length(opts)=0 then expr
+  else block(
+    [var, pow],
+    [var, pow]: [first(opts), second(opts)],
+    ratcoeff(apply(mcoeff, append([expr], rest(opts, 2))), var, pow))$
+
+graph_generating_function(n, [var]) := (
+  if length(var)#1 then var:'t else var:first(var),
+  ratexpand(subst(inventory([1,var], n^2), _transform_structure(cycle_index_symmetric(n, 'x)))))$
+
+number_of_graphs(n, [m]) :=
+  if length(m)=1 then block(
+    [t],
+    coeff(graph_generating_function(n, t), t, first(m)))
+  else graph_generating_function(n, 1)$
+
+_vectors(lst, len) :=
+  if len=1 then map("[", lst)
+  else block(
+    [v1: _vectors(lst, len-1)],
+    apply(append,
+      makelist(
+        map(lambda([s], cons(x, s)), v1),
+        x, lst)))$
+
+list_graphs(n, [m]) := block(
+  [edg_v, all_edges: 1+edges(complete_graph(n)), graphs:[], vec],
+  vec: _vectors([0,1], n*(n-1)/2),
+  if length(m)=1 then vec: sublist(vec, lambda([v], is(count(1, v)=first(m)))),
+  edg_v: group_orbit_representatives(
+    group_action(symmetric_group(n, 'generators=true), map(setify, all_edges)),
+    'set=vec,
+    'action=permute_list, 'generators=true),
+  for edgs in edg_v do block(
+    [elst: map("=", edgs, all_edges), g: create_graph(int_range(n), [])],
+    add_edges(map(rhs, sublist(elst, lambda([eq], is(lhs(eq)=1)))),g),
+    graphs: cons(g, graphs)),
+  graphs)$
+
+list_necklaces(len, lst, [options]) := group_orbit_representatives(
+  if assoc('dihedral, options, false)= true then dihedral_group(len) else cyclic_group(len),
+  'set=_vectors(lst, len),
+  'action=permute_list)$
+
+
+/****************************
+ *
+ * Number theory
+ *
+ ***************************/
+
+divisiblep(a,b) := is(second(divide(b,a))=0)$
+
+_split_equations(rems, mods) := block(
+  [pairs: makelist([rems[i], mods[i]], i, 1, length(rems)),
+   new_pairs:[]],
+  while pairs#[] do block(
+    [p1: first(pairs), add_p1:true],
+    /*print("Working on", p1),*/
+    pairs: rest(pairs),
+    for p2 in pairs while add_p1=true do block(
+      [g: gcd(second(p1), second(p2))],
+      if g>1 then block(
+        [a1: second(p1)/g, a2: second(p2)/g, g1, g_mod: first(p1)],
+        /********
+         * We have:
+         *   x = m1 (mod a)
+         *   x = m2 (mod b)
+         *   g=gcd(a,b)>1
+         * We want three equations
+         *   x = n1 (mod a1)
+         *   x = n2 (mod a2)
+         *   x = n3 (mod a3)
+         * where a1, a2, a3 are pairwise coprime and the solutions for both systems are
+         * equivalent.
+         ********/
+        /*print("Split:", p1, p2),*/
+        pairs: delete(p2, pairs),
+        if mod(first(p1), g)#mod(first(p2), g) then error("Inconsistent equations!"),
+        while (g1:gcd(g, a1))>1 do (g:g*g1, a1:a1/g1, g_mod:first(p1)),
+        while (g1:gcd(g, a2))>1 do (g:g*g1, a2:a2/g1, g_mod:first(p2)),
+        add_p1:false,
+        pairs: cons([mod(g_mod, g), g], pairs),
+        if a1>1 then pairs: cons([mod(first(p1), a1), a1], pairs),
+        if a2>1 then pairs: cons([mod(first(p2), a2), a2], pairs))),
+    if add_p1=true then new_pairs: cons(p1, new_pairs)),
+  new_pairs)$
+
+chinese_remainder(a_lst, m_lst) := block(
+  [M, sm_lst, split: _split_equations(a_lst, m_lst)],
+  a_lst: map('first, split),
+  m_lst: map('second, split),
+  M: apply("*", m_lst),
+  sm_lst: map(
+    lambda([a,m],
+      a*M/m*inv_mod(M/m, m)),
+    a_lst, m_lst),
+  [mod(xreduce("+", sm_lst), M), M])$
+
+_new_ind_n : 0$
+_new_ind_k : 0$
+_new_var(x) :=
+  if x=%k then (_new_ind_k:_new_ind_k+1, concat(%k, _new_ind_k))
+  else (_new_ind_n:_new_ind_n+1, concat(%n, _new_ind_n))$
+
+solve_lde2(eqn, x, y) := block(
+  [eqn: ratexpand(rhs(eqn)-lhs(eqn)), a, a0, b, b0, l0, l1, l2, c],
+  a: abs(a0:coeff(eqn, x)), b:abs(b0:coeff(eqn, y)),
+  c: eqn-a0*x-b0*y,
+  l1: [a, 1, 0],
+  l2: [b, 0, 1],
+  l0: -[a,b]/[a0,b0],
+  while first(l2)#0 do block(
+    [k: first(divide(l1[1], l2[1]))],
+    [l1, l2]: [l2, l1-k*l2]),
+  map("=", [x,y], l0*rest(c*l1+'k*l2)))$
+
+solve_lde(eqn) := (
+  _new_ind_n : 0,
+  _new_ind_k : 0,
+  sort(_solve_lde_sub(num(ratsimp(lhs(eqn)-rhs(eqn))))))$
+
+_solve_lde_sub(eqn) := block(
+  [coefs, vars:listofvars(eqn), best, best_var, eqn1,
+  params, sol, g : false],
+
+  /* find the variable with minimal coefficient */
+  best : inf,
+  for x in vars do block(
+    [c:coeff(eqn, x)],
+    if not(integerp(c)) then error("Non-integer coefficient!"),
+    if g=false then g:c else g:gcd(g, c),
+    if abs(coeff(eqn, x))<best then (
+      best_var : x,
+      best : abs(coeff(eqn, x)))),
+
+  eqn : ratsimp(eqn/g),
+  best : best/g,
+  const : eqn,
+  for x in vars do const : const - x*coeff(const, x),
+  if not integerp(const) then error("Equation not solvable!"),
+
+  /* if the minimum coefficient is 1 then solve the equation */
+  if best=1 then (
+    eqn1 : first(solve(eqn, best_var)),
+    params : listofvars(rhs(eqn1)),
+    params : makelist(p=_new_var(%k), p, params),
+    params : cons(subst(params, eqn1), params))
+
+  /* else call LDE recursively */
+  else (
+    eqn1 : makelist(mod(coeff(eqn, x), best)*x, x, vars),
+    eqn1 : apply("+", eqn1) + mod(const, best),
+    sol : _solve_lde_sub(-best*_new_var(%n)+eqn1),
+    sol : ratsimp(makelist(
+        x=if assoc(x, sol)#false then assoc(x, sol)
+          else new_var(%k),
+        x, delete(best_var, vars))),
+    sol : append([best_var=subst(sol, rhs(first(solve(eqn, best_var))))], sol),
+    ratsimp(sol)))$
+
+int_digits(n) := 
+  if not integerp(n) and n>0 then error("int_digits: the argument should be a positive integer")
+  else block(
+    [r:n,d, digits:[]],
+    while r>0 do (
+      [r,d]: divide(r, 10),
+      digits: cons(d, digits)),
+    digits)$
+
+num_digits(n) := length(int_digits(n));
+
+/****************************
+ *
+ * Some function should be compiled!
+ *
+ ***************************/
+
+compile(
+  permutation_product,
+  inverse_permutation,
+  permutation_power,
+  permutation_to_cycles,
+  permutation_from_cycles,
+  permutation_to_transpositions,
+  permutation_from_transpositions,
+  permutation_fixed_points,
+  group_action,
+  group_orbit,
+  group_from_generators,
+  rook_polynomial,
+  count,
+  random_choice_n,
+  cycle_index_permutation,
+  nth_subset,
+  int_range,
+  _from_degree_sequence_sorted,
+  _relation_product,
+  _random_schreier_sims,
+  _compute_deltas,
+  _strip_generator
+)$
+
