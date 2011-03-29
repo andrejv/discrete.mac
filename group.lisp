@@ -6,7 +6,7 @@
 ;;;  of automorphisms of a simple graph.                          ;;;
 ;;;                                                               ;;;
 ;;;  Author: Andrej Vodopivec <andrej.vodopivec@gmail.com>        ;;;
-;;;  Licence: GPL                                                 ;;;
+;;;  Licence: GPL version 2 or later                              ;;;
 ;;;                                                               ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

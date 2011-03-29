@@ -16,12 +16,13 @@
  ***                                                               ***
  ***                                                               ***
  ***  Author:  Andrej Vodopivec <andrej.vodopivec@gmail.com>       ***
- ***  Licence: GPL                                                 ***
- **                                                                ***
+ ***  Licence: GPL version 2 or later                              ***
+ ***                                                               ***
  *********************************************************************/
 
 if get('graphs, 'version)=false then load(graphs)$
 if get('Species, 'version)=false then load(Species)$
+if get('logic, version)=false then load(logic)$
 
 put('discrete, 1, 'version)$
 
