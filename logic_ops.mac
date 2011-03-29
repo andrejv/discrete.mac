@@ -19,16 +19,16 @@
 
 put('logic, 1.0, 'version)$
 
-infix('nand,64)$
+infix('nand,64,64)$
 declare("nand",commutative)$
 
-infix('nor,63)$
+infix('nor,64,64)$
 declare("nor",commutative)$
 
-infix('implies,59)$
+infix('implies,59,59)$
 
-infix('equiv,58)$
+infix('equiv,58,58)$
 declare("equiv",commutative)$
 
-infix('xor,58)$
+infix('xor,58,58)$
 declare("xor",commutative)$
