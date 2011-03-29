@@ -12,6 +12,7 @@ for the computer algebra system Maxima. It includes functions for
 * Polya counting theory
 * combinatorial species using the Species package
 * number theory: solve_lde, chinese_remainder
+* boolean logic
 
 To use the package download it and extract it somewhere where Maxima
 can find it.
