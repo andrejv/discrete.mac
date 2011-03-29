@@ -1,0 +1,34 @@
+/*********************************************************************
+ *********************************************************************
+ ***                                                               ***
+ ***                     ~*~ LOGIC.MAC ~*~                         ***
+ ***                                                               ***
+ ***  Definitions for logic operators.                             ***
+ ***                                                               ***
+ ***  Author:  Andrej Vodopivec <andrej.vodopivec@gmail.com>       ***
+ ***  Licence: GPL version 2 or later                              ***
+ ***                                                               ***
+ *********************************************************************/
+
+
+/*******
+ * - logic operators nand, nor, implies, eqiv, xor
+ * - the binding powers of and is 65 and the binding power of
+ *   or is 60.
+ ****/
+
+put('logic, 1.0, 'version)$
+
+infix('nand,64)$
+declare("nand",commutative)$
+
+infix('nor,63)$
+declare("nor",commutative)$
+
+infix('implies,59)$
+
+infix('equiv,58)$
+declare("equiv",commutative)$
+
+infix('xor,58)$
+declare("xor",commutative)$

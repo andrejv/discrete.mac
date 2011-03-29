@@ -256,6 +256,48 @@ functions.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Logic}
+\begin{description}
+  \item[latomp(expr):] checks if $expr$ is an atom or a negation of an
+    atom.
+  \item[beval(expr):] evaluates a boolean expression.
+  \item[boolean\_expression(k, vars)]: returns the $k$--th boolean
+    expression in variables $vars$ ($0\leq k < 2^{2^{|vars|}}$).
+  \item[random\_boolean\_expression(vars):] returns a random boolean
+    expression in variables $vars$.
+  \item[boolean\_form(expr):] rewrites $expr$ in a form in which the
+    only connectives are $\land$, $\lor$ and $\lnot$.
+  \item[boolean\_minimize(e):] finds a shortest formula in disjunctive
+    normal form which is equivalent to $e$.
+  \item[boolean\_table(expr, vars):] writes the boolean table for
+    $expr$.
+  \item[characteristic\_vector(expr):] returns the characteristic
+    vector of the expression $expr$.
+  \item[convert\_to\_cnf(expr):] converts $expr$ to conjunctive normal
+    form.
+  \item[convert\_to\_dnf(expr):] converts $expr$ to disjunctive normal
+    form.
+  \item[convert\_to\_mod2(expr):] converts a boolean expression into a
+    mod--2 polynomial.
+  \item[functionally\_complete(conn1, conn2,...):] tests if $\{conn_1,
+    conn_2, \ldots\}$ is a functionally complete set of connectives.
+  \item[logic\_equiv(e1, e2):] checks if $e_1$ and $e_2$ are logically
+    equivalent.
+  \item[majority(v1,v2,\ldots):] returns an expression which is true
+    if the majority of variables $v_1, v_2, \ldots$, is true.
+  \item[satisfiablep(e):] checks if the formula $e$ is satisfiable.
+  \item[satisfiability\_instances(e):] returns the values for logic
+    variables in $e$ for which the formula $e$ is true.
+  \item[satisfiablep\_dpll(e):] check if the formula $e$ in
+    conjunctive normal form is satisfiable.
+  \item[dpll\_solution]: if \verb|satisfiablep_dpll(e)| returns true,
+    $dpll\_solution$ will hold the assingments under which $e$
+    evaluates to true.
+  \item[tautologyp(e):] checks if $e$ is a tautology.
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Combinatorial species}
 
 \subsection{Constructions}
@@ -330,6 +372,10 @@ The constructions \texttt{Set}, \texttt{MSet}, \texttt{Seq} and
   \item [int\_range(a b, c):] returns the integers from $a$ to $b$ by
     step $c$. If $c$ is omitted, the step is 1. If $b$ and $c$ are
     omitted, it returns the integers from 1 to $a$ by step 1.
+  \item[remove\_duplicates(lst):] removes the duplicates in the
+    list $lst$.
+  \item[remove\_duplicates\_sorted(lst):] removes the duplicates
+    in the list $lst$ which is a sorted list.
 \end{description}
 
 \end{document}

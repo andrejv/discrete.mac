@@ -1,0 +1,289 @@
+/*********************************************************************
+ *********************************************************************
+ ***                                                               ***
+ ***                     ~*~ LOGIC.MAC ~*~                         ***
+ ***                                                               ***
+ ***  A simple package for logic in Maxima.                        ***
+ ***                                                               ***
+ ***  Author:  Andrej Vodopivec <andrej.vodopivec@gmail.com>       ***
+ ***  Licence: GPL version 2 or later                              ***
+ ***                                                               ***
+ *********************************************************************/
+
+load("opsubst")$
+if get(logic, version)=false then load("logic_ops.mac")$
+if file_search("boolmin.lisp")#false then load("boolmin")$
+load(lrats)$
+
+remove_duplicates(lst) := block(
+  [lst: sort(lst)],
+  remove_duplicates_sorted(lst))$
+
+remove_duplicates_sorted(lst) :=
+ if rest(lst)=[] then lst
+ else if first(lst)=second(lst) then remove_duplicates_sorted(rest(lst))
+ else cons(first(lst), remove_duplicates_sorted(rest(lst)))$
+
+latomp(a) :=
+  if mapatom(a) then true
+  else if op(a)="not" and mapatom(first(a)) then true
+  else false$
+
+_basic_term(expr, o) :=
+  if latomp(expr) then true
+  else if op(expr)=o and every(latomp, args(expr)) then true
+  else false$
+
+_simp_term(expr, val) :=
+  if latomp(expr) then expr
+  else block(
+    [terms: remove_duplicates(args(expr)), nterms],
+    nterms: map("not", terms),
+    if intersection(setify(terms), setify(nterms))#{} then val
+    else apply(op(expr), terms))$
+
+convert_to_dnf(expr) := apply("or",
+  remove_duplicates(
+    map(lambda([term], _simp_term(term, false)), _basic_terms(boolean_form(expr), "and", "or"))))$
+
+convert_to_cnf(expr) := apply("and",
+  remove_duplicates(
+    map(lambda([term], _simp_term(term, true)), _basic_terms(boolean_form(expr), "or", "and"))))$
+
+_basic_terms(expr, o1, o2) :=
+  if latomp(expr) then [expr]
+  else if _basic_term(expr, o1) then [apply(o1, remove_duplicates(args(expr)))]
+  else if op(expr)=o2 then apply(append, map(lambda([a__], _basic_terms(a__,o1,o2)), args(expr)))
+  else if op(expr)=o1 then
+    flatten(
+      apply(
+        outermap,
+        cons(o1, map(lambda([a__], _basic_terms(a__,o1,o2)), args(expr)))))$
+
+boolean_form(expr) := block(
+  [bexpr],
+  bexpr: opsubst(    "xor" = lambda([a__,b__], a__ and not(b__) or not(a__) and b__), expr),
+  bexpr: opsubst(    "nor" = lambda([a__,b__], not(a__ or b__)), bexpr),
+  bexpr: opsubst(   "nand" = lambda([a__,b__], not(a__ and b__)), bexpr),
+  bexpr: opsubst("implies" = lambda([a__,b__], not(a__) or b__), bexpr),
+  bexpr: opsubst(  "equiv" = lambda([a__,b__], (a__ and b__) or (not a__ and not b__)), bexpr))$
+
+beval(expr) :=
+  if atom(expr) then expr
+  else if op(expr)="not" then not(befal(first(expr)))
+  else if member(op(expr), ["and", "or"]) then map(beval, expr)
+  else if op(expr)="xor" then block(
+    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    (t1__ and not t2__) or (not t1__ and t2__))
+  else if op(expr)="nor" then block(
+    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    not(t1__ or t2__))
+  else if op(expr)="nand" then block(
+    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    not(t1__ and t2__))
+  else if op(expr)="implies" then block(
+    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    not(t1__) or t2__)
+  else if op(expr)="equiv" then block(
+    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    (t1__ and t2__) or (not t1__ and not t2__))
+  else map(beval, expr)$
+
+
+characteristic_vector(expr, [vars]) :=
+  _characteristic_vector(expr, if vars=[] then listofvars(expr) else first(vars))$
+
+_characteristic_vector(expr, vars) :=
+  if vars=[] then [beval(expr)]
+  else append(
+    _characteristic_vector(subst(first(vars)=false, expr), rest(vars)),
+    _characteristic_vector(subst(first(vars)=true, expr), rest(vars)))$
+
+_bit_values(i,n) := reverse(makelist(?logbitp(k,i),k,0,n-1))$
+
+boolean_table(expr, [vars]) := block(
+  [table, n, opts:[], names],
+  if not listp(expr) then expr: [expr],
+  if length(vars)=0 then (
+    vars: listofvars(expr),
+    expr: append(vars, expr))
+  else (
+    if listp(first(vars)) then (
+      opts: rest(vars),
+      vars: first(vars))
+    else (
+      opts: vars,
+      vars: listofvars(expr)),
+    if assoc('variables, opts, true)=true then (
+      expr: append(vars, expr))),
+  table: characteristic_vector(expr),
+  if get(wxmaxima, version)#false then
+    table_form(subst([true=1, false=0], table), column_names=expr)
+  else
+    apply(matrix, cons(expr, table)))$
+
+logic_equiv(expr1, expr2) := block(
+  [vars: listofvars([expr1, expr2])],
+  is(characteristic_vector(expr1, vars)=characteristic_vector(expr2, vars)))$
+
+tautologyp(expr) := every(identity, characteristic_vector(expr))$
+
+satisfiablep(expr) := some(identity, characteristic_vector(expr))$
+
+satisfiability_instances(expr, [vars]) := block(
+  [charvect, indices, n],
+  if vars=[] then vars: listofvars(expr)
+  else vars: vars[1],
+  n: length(vars),
+  charvect: characteristic_vector(expr, vars),
+  indices: sublist_indices(charvect, identity),
+  indices: map(lambda([x], _bit_values(x-1, n)), indices),
+  map(lambda([lst], map("=", vars, lst)), indices))$
+
+define_variable(dpll_solution, [], list)$
+
+satisfiablep_dpll(expr) := block(
+  [terms: map(
+    lambda([term], _simp_term(term, false)),
+    remove_duplicates(_basic_terms(boolean_form(expr), "or", "and")))],
+  dpll_solution:[],
+  terms: delete(true, map(lambda([a], _simp_term(a, true)), terms)),
+  _dpll(setify(terms), random_permutation(listofvars(expr))))$
+
+_dpll(expr, vars) := 
+  if vars=[] then every(identity, expr)
+  else if freeof(first(vars), expr) then (
+    dpll_solution: cons(first(vars)=true, dpll_solution),
+    _dpll(expr, rest(vars)))
+  else if some("not", expr)=true then false
+  else block(
+    [expr1: delete(true, expr), units],
+    units: subset(expr1, latomp),
+    for u in units do (
+      if mapatom(u) then (
+        dpll_solution: cons(u=true, dpll_solution),
+        vars: delete(u, vars),
+        expr1: subst(u=true, expr1))
+      else (
+        dpll_solution: cons(first(u)=false, dpll_solution),
+        vars: delete(first(u), vars),
+        expr1: subst(first(u)=false, expr1))),
+    expr1: delete(true, expr1),
+    if vars=[] then is(every(identity, expr)=true)
+    else if _dpll(subst(first(vars)=true, expr1), rest(vars))=true then (
+      dpll_solution: cons(first(vars)=true, dpll_solution),
+      true)
+    else if _dpll(subst(first(vars)=false, expr1), rest(vars)) then (
+      dpll_solution: cons(first(vars)=false, dpll_solution),
+      true)
+    else false)$
+
+boolean_minimize(expr) := block(
+  [expr: convert_to_dnf(expr)],
+  if _basic_term(expr, "and") then expr
+  else ?boolmin(expr))$
+
+boolean_expression(num, vars) := block(
+  [n: length(vars), char_vect, formula: false],
+  char_vect: _bit_values(num, 2^n),
+  for i:1 thru 2^n do (
+    if char_vect[i] = true then block(
+      [term: _bit_values(i, n)],
+      term: map(lambda([x,y],
+          if x=true then y else not y),
+        term, vars),
+      term: apply("and", term),
+      formula: formula or term)),
+  formula)$
+
+random_boolean_expression([vars]) := block(
+  [vars: if length(vars)=1 and integerp(first(vars)) then makelist(x[i], i, first(vars))
+         else if length(vars)=1 and listp(first(vars)) then vars:first(vars)
+         else vars],
+  boolean_expression(random(2^(2^length(vars))), vars))$
+
+_monotone_charvect(vec) := 
+  if length(vec)=1 then true
+  else block(
+    [vec1, vec2, n: length(vec)/2],
+    vec1: makelist(vec[i], i, 1, n),
+    vec2: makelist(vec[i+n], i, 1, n),
+    is(
+      _monotone_charvect(vec1) and
+      _monotone_charvect(vec2) and
+      every("<=", vec1, vec2)=true))$
+
+monotone_bexprp(expr) := _monotone_charvect(subst([true=1, false=0], characteristic_vector(expr)))$
+
+_linear_charvect(vec) := 
+  if length(vec)=1 then true
+  else block(
+    [vec1, vec2, n: length(vec)/2],
+    vec1: makelist(vec[i], i, 1, n),
+    vec2: makelist(vec[i+n], i, 1, n),
+    is(
+      _linear_charvect(vec1) and
+      (vec1 = vec2 or vec1 = 1-vec2)))$
+
+linear_bexprp(expr) := _linear_charvect(subst([true=1, false=0], characteristic_vector(expr)))$
+
+closed_under_true(expr) := if expr=false then false else _closed_under(expr, true)$
+
+closed_under_false(expr) := if expr=true then false else _closed_under(expr, false)$
+
+_closed_under(expr, val) := is( beval(subst(makelist(v__=val, v__, listofvars(expr)), expr)) = val )$
+
+self_dual_bexprp(expr) := block(
+  [vars: listofvars(expr), dexpr],
+  dexpr: subst(makelist(v__ = "not"(v__), v__, vars), expr),
+  logic_equiv(not(expr), dexpr))$
+
+functionally_completep([connectives]) := block(
+  [tests:[closed_under_true,
+          closed_under_false,
+          self_dual_bexprp,
+          linear_bexprp,
+          monotone_bexprp],
+   fc:true],
+  for test in tests while fc=true do (
+    fc: some("not", map(test, connectives))),
+  is(fc=true))$
+
+convert_to_mod2(expr) := block(
+  [pol, modulus:2],
+  pol: _convert_to_mod2(expr),
+  for v__ in listofvars(expr) do (
+    pol: fullratsubst(v__^2=v__, pol)),
+  ratexpand(pol))$
+
+_convert_to_mod2(expr) :=
+  if atom(expr) then expr
+  else if op(expr)="not" then 1-_convert_to_mod2(first(expr))
+  else if op(expr)="and" then apply("*", map(convert_to_mod2, args(expr)))
+  else if op(expr)="or" then block(
+    [parts: map(_convert_to_mod2, args(expr)), pol:0],
+    for p_ in parts do pol: p_ + pol + p_*pol,
+    pol)
+  else if op(expr)="xor" then block(
+    [t1__: _convert_to_mod2(first(expr)), t2__: _convert_to_mod2(second(expr))],
+    t1__ + t2__)
+  else if op(expr)="nor" then block(
+    [t1__: _convert_to_mod2(first(expr)), t2__: _convert_to_mod2(second(expr))],
+    1 + t1__ + t2__ + t1__*t2__)
+  else if op(expr)="nand" then block(
+    [t1__: _convert_to_mod2(first(expr)), t2__: _convert_to_mod2(second(expr))],
+    1 + t1__ * t2__)
+  else if op(expr)="implies" then block(
+    [t1__: _convert_to_mod2(first(expr)), t2__: _convert_to_mod2(second(expr))],
+    1 + t1__ + t1__*t2__)
+  else if op(expr)="equiv" then block(
+    [t1__: _convert_to_mod2(first(expr)), t2__: _convert_to_mod2(second(expr))],
+    1 + t1__ + t2__)
+  else map(_convert_to_mod2, expr)$
+
+majority([vars]) := block(
+  [n, terms],
+  n: ceiling(length(vars)/2),
+  terms: full_listify(powerset(setify(vars), n)),
+  terms: map(lambda([st], apply("and", st)), terms),
+  xreduce("or", listify(terms)))$
