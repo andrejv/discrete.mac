@@ -128,6 +128,8 @@ logic_equiv(expr1, expr2) := block(
 
 tautologyp(expr) := every(identity, characteristic_vector(expr))$
 
+contradictionp(expr) := every("not", characteristic_vector(expr))$
+
 satisfiablep(expr) := some(identity, characteristic_vector(expr))$
 
 satisfiability_instances(expr, [vars]) := block(
@@ -287,3 +289,15 @@ majority([vars]) := block(
   terms: full_listify(powerset(setify(vars), n)),
   terms: map(lambda([st], apply("and", st)), terms),
   xreduce("or", listify(terms)))$
+
+_boolean_term(n, vars, op) := block(
+  [bv: _bit_values(n, length(vars))],
+  apply(op, beval(map("equiv", vars, bv))))$
+
+boolean_minterms(n, vars) := 
+  if integerp(n) then _boolean_term(n, vars, "and")
+  else apply("or", makelist(_boolean_term(i, vars, "and"), i, n))$
+
+boolean_maxterms(n, vars) := 
+  if integerp(n) then _boolean_term(n, vars, "or")
+  else apply("and", makelist(_boolean_term(i, vars, "or"), i, n))$
