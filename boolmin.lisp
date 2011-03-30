@@ -3,7 +3,7 @@
 ;;;                  ~*~ boolmin.lisp ~*~                         ;;;
 ;;;                                                               ;;;
 ;;;  An implementation of Quine-McCluskey algorithm for Maxima.   ;;;
-;;;  (http://en.wikipedia.org/wiki/Quine–McCluskey_algorithm)     ;;;
+;;;  (http://en.wikipedia.org/wiki/Quine-McCluskey_algorithm)     ;;;
 ;;;                                                               ;;;
 ;;;  Author: Andrej Vodopivec <andrej.vodopivec@gmail.com>        ;;;
 ;;;  Licence: GPL version 2 or later                              ;;;
