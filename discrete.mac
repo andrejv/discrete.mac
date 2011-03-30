@@ -276,7 +276,7 @@ partial_order_relationp(R, [A]) := block(
   [],
   if length(A)=0 then A:setify(flatten(listify(first(R))))
   else A:first(A),
-  tranzitive_relationp(R) and reflexive_relationp(R,A) and anyisymmetric_relationp(R,A))$
+  tranzitive_relationp(R) and reflexive_relationp(R,A) and antisymmetric_relationp(R,A))$
 
 hasse_diagram(g) := block(
   [hg, vrt, edges:[], layer, next_layer, h:0, pos:[], new_edges],
