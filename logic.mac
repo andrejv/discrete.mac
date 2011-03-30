@@ -301,3 +301,41 @@ boolean_minterms(n, vars) :=
 boolean_maxterms(n, vars) := 
   if integerp(n) then _boolean_term(n, vars, "or")
   else apply("and", makelist(_boolean_term(i, vars, "or"), i, n))$
+
+
+define_variable(minisat_program, "/Users/drasko/Projects/minisat/core/minisat", any)$
+define_variable(minisat_solution, [], list)$
+
+_write_term(term, vars) :=
+  if mapatom(term) then sconcat(assoc(term, vars))
+  else if op(term)="not" then sconcat(-assoc(first(term), vars))
+  else printf(false, "~{~a~^ ~}", map(lambda([t], _write_term(t, vars)), term))$
+
+_write_dimacs_cnf(formula, file) := block(
+  [ffile: if stringp(file) then openw(file) else true, vars, i:0],
+  vars: makelist(v=(i:i+1), v, listofvars(formula)),
+  printf(ffile, "c Exported from Maxima~%"),
+  printf(ffile, "p cnf ~a ~a~%", length(listofvars(formula)), length(formula)),
+  for term in formula do
+    printf(ffile, "~a 0~%", _write_term(term, vars)),
+  if ffile#true then close(ffile))$
+
+_read_minisat_res(file, vars) := block(
+  [ffile: openr(file), res],
+  res: readline(ffile),
+  if res="SAT" then block(
+    [vals: readline(ffile), maperror:false, mapprint:false],
+    close(ffile),
+    minisat_solution: map("=", vars, map(lambda([int], is(?parse\-integer(int)>0)), tokens(vals))),
+    true)
+  else (
+    close(ffile),
+    false))$
+
+satisfiablep_minisat(formula) := block(
+  [file: sconcat(maxima_tempdir, "/minisat.in"),
+   out_file: sconcat(maxima_tempdir, "/minisat.out"), command],
+  command: sconcat(minisat_program, " ", file, " ", out_file, " > /dev/null"),
+  _write_dimacs_cnf(convert_to_cnf(formula), file),
+  system(command),
+  _read_minisat_res(out_file, listofvars(formula)))$
