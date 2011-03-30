@@ -70,7 +70,7 @@ boolean_form(expr) := block(
 
 beval(expr) :=
   if atom(expr) then expr
-  else if op(expr)="not" then not(befal(first(expr)))
+  else if op(expr)="not" then not(beval(first(expr)))
   else if member(op(expr), ["and", "or"]) then map(beval, expr)
   else if op(expr)="xor" then block(
     [t1__: beval(first(expr)), t2__: beval(second(expr))],
