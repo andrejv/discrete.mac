@@ -267,12 +267,19 @@ functions.
     expression in variables $vars$.
   \item[boolean\_form(expr):] rewrites $expr$ in a form in which the
     only connectives are $\land$, $\lor$ and $\lnot$.
+  \item[boolean\_minterm(n, vars):] returns the $n$--th minterm in
+    variables $vars$.
+  \item[boolean\_maxterm(n, vars):] returns the $n$--the maxterm in
+    variables $vars$.
   \item[boolean\_minimize(e):] finds a shortest formula in disjunctive
     normal form which is equivalent to $e$.
   \item[boolean\_table(expr, vars):] writes the boolean table for
     $expr$.
   \item[characteristic\_vector(expr):] returns the characteristic
     vector of the expression $expr$.
+  \item[contradictionp(e):] checks if $e$ is a contradiction. An
+    option \texttt{algorithm} can be specified to select the algorithm
+    used. See also \texttt{satisfiablep}.
   \item[convert\_to\_cnf(expr):] converts $expr$ to conjunctive normal
     form.
   \item[convert\_to\_dnf(expr):] converts $expr$ to disjunctive normal
@@ -285,15 +292,22 @@ functions.
     equivalent.
   \item[majority(v1,v2,\ldots):] returns an expression which is true
     if the majority of variables $v_1, v_2, \ldots$, is true.
-  \item[satisfiablep(e):] checks if the formula $e$ is satisfiable.
+  \item[satisfiablep(e):] checks if the formula $e$ is satisfiable. An
+    option \texttt{algorithm} can be specified to select the algorithm
+    used. The accepted values are \texttt{algorithm=charvect},
+    \texttt{algorithm=dpll} (the default) or
+    \texttt{algorithm=minisat}. If \texttt{algorithm=minisat} then the
+    minisat program should be installed and the option variable
+    \texttt{minisat\_program} should point to the minisat program.
+  \item[sat\_solution]: if \verb|satisfiablep_dpll(e)| returns
+    \texttt{true} and the selected algorithm is \texttt{dpll} or
+    \texttt{minisat}, $sat\_solution$ will hold the assingments under
+    which $e$ evaluates to true.
   \item[satisfiability\_instances(e):] returns the values for logic
     variables in $e$ for which the formula $e$ is true.
-  \item[satisfiablep\_dpll(e):] check if the formula $e$ in
-    conjunctive normal form is satisfiable.
-  \item[dpll\_solution]: if \verb|satisfiablep_dpll(e)| returns true,
-    $dpll\_solution$ will hold the assingments under which $e$
-    evaluates to true.
-  \item[tautologyp(e):] checks if $e$ is a tautology.
+  \item[tautologyp(e):] checks if $e$ is a tautology. An option
+    \texttt{algorithm} can be specified to select the algorithm
+    used. See also \texttt{satisfiablep}.
 \end{description}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
