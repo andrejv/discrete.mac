@@ -126,11 +126,23 @@ logic_equiv(expr1, expr2) := block(
   [vars: listofvars([expr1, expr2])],
   is(characteristic_vector(expr1, vars)=characteristic_vector(expr2, vars)))$
 
-tautologyp(expr) := every(identity, characteristic_vector(expr))$
+tautologyp(expr, [options]) := block(
+  [alg: assoc('algorithm, options, 'dpll)],
+  if alg='dpll then not _satisfiablep_dpll(not expr)
+  else if alg='minisat then not _satisfiablep_minisat(not expr)
+  else every(identity, characteristic_vector(expr)))$
 
-contradictionp(expr) := every("not", characteristic_vector(expr))$
+contradictionp(expr, [options]) := block(
+  [alg: assoc('algorithm, options, 'dpll)],
+  if alg='dpll then not _satisfiablep_dpll(expr)
+  else if alg='minisat then not _satisfiablep_minisat(expr)
+  else every("not", characteristic_vector(expr)))$
 
-satisfiablep(expr) := some(identity, characteristic_vector(expr))$
+satisfiablep(expr, [options]) := block(
+  [alg: assoc('algorithm, options, 'dpll)],
+  if alg='dpll then _satisfiablep_dpll(expr)
+  else if alg='minisat then _satisfiablep_minisat(convert_to_cnf(expr))
+  else some(identity, characteristic_vector(expr)))$
 
 satisfiability_instances(expr, [vars]) := block(
   [charvect, indices, n],
@@ -142,20 +154,20 @@ satisfiability_instances(expr, [vars]) := block(
   indices: map(lambda([x], _bit_values(x-1, n)), indices),
   map(lambda([lst], map("=", vars, lst)), indices))$
 
-define_variable(dpll_solution, [], list)$
+define_variable(sat_solution, [], list)$
 
-satisfiablep_dpll(expr) := block(
+_satisfiablep_dpll(expr) := block(
   [terms: map(
     lambda([term], _simp_term(term, false)),
     remove_duplicates(_basic_terms(boolean_form(expr), "or", "and")))],
-  dpll_solution:[],
+  sat_solution:[],
   terms: delete(true, map(lambda([a], _simp_term(a, true)), terms)),
   _dpll(setify(terms), random_permutation(listofvars(expr))))$
 
 _dpll(expr, vars) := 
   if vars=[] then every(identity, expr)
   else if freeof(first(vars), expr) then (
-    dpll_solution: cons(first(vars)=true, dpll_solution),
+    sat_solution: cons(first(vars)=true, sat_solution),
     _dpll(expr, rest(vars)))
   else if some("not", expr)=true then false
   else block(
@@ -163,20 +175,20 @@ _dpll(expr, vars) :=
     units: subset(expr1, latomp),
     for u in units do (
       if mapatom(u) then (
-        dpll_solution: cons(u=true, dpll_solution),
+        sat_solution: cons(u=true, sat_solution),
         vars: delete(u, vars),
         expr1: subst(u=true, expr1))
       else (
-        dpll_solution: cons(first(u)=false, dpll_solution),
+        sat_solution: cons(first(u)=false, sat_solution),
         vars: delete(first(u), vars),
         expr1: subst(first(u)=false, expr1))),
     expr1: delete(true, expr1),
     if vars=[] then is(every(identity, expr)=true)
     else if _dpll(subst(first(vars)=true, expr1), rest(vars))=true then (
-      dpll_solution: cons(first(vars)=true, dpll_solution),
+      sat_solution: cons(first(vars)=true, sat_solution),
       true)
     else if _dpll(subst(first(vars)=false, expr1), rest(vars)) then (
-      dpll_solution: cons(first(vars)=false, dpll_solution),
+      sat_solution: cons(first(vars)=false, dpll_solution),
       true)
     else false)$
 
@@ -302,9 +314,8 @@ boolean_maxterms(n, vars) :=
   if integerp(n) then _boolean_term(n, vars, "or")
   else apply("and", makelist(_boolean_term(i, vars, "or"), i, n))$
 
-
 define_variable(minisat_program, "/Users/drasko/Projects/minisat/core/minisat", any)$
-define_variable(minisat_solution, [], list)$
+define_variable(sat_solution, [], list)$
 
 _write_term(term, vars) :=
   if mapatom(term) then sconcat(assoc(term, vars))
@@ -326,13 +337,13 @@ _read_minisat_res(file, vars) := block(
   if res="SAT" then block(
     [vals: readline(ffile), maperror:false, mapprint:false],
     close(ffile),
-    minisat_solution: map("=", vars, map(lambda([int], is(?parse\-integer(int)>0)), tokens(vals))),
+    sat_solution: map("=", vars, map(lambda([int], is(?parse\-integer(int)>0)), tokens(vals))),
     true)
   else (
     close(ffile),
     false))$
 
-satisfiablep_minisat(formula) := block(
+_satisfiablep_minisat(formula) := block(
   [file: sconcat(maxima_tempdir, "/minisat.in"),
    out_file: sconcat(maxima_tempdir, "/minisat.out"), command],
   command: sconcat(minisat_program, " ", file, " ", out_file, " > /dev/null"),
