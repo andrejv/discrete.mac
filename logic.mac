@@ -188,7 +188,7 @@ _dpll(expr, vars) :=
       sat_solution: cons(first(vars)=true, sat_solution),
       true)
     else if _dpll(subst(first(vars)=false, expr1), rest(vars)) then (
-      sat_solution: cons(first(vars)=false, dpll_solution),
+      sat_solution: cons(first(vars)=false, sat_solution),
       true)
     else false)$
 
