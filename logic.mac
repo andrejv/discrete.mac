@@ -42,20 +42,20 @@ _simp_term(expr, val) :=
     if intersection(setify(terms), setify(nterms))#{} then val
     else apply(op(expr), terms))$
 
-_convert_to_nf_charvect(expr, o) := block(
-  [cv: characteristic_vector(expr), vars: listofvars(expr), n, qv: if o="and" then false else true],
+_convert_to_nf_charvect(expr, o1, o2, qv) := block(
+  [cv: characteristic_vector(expr), vars: listofvars(expr), n],
   n: length(vars),
-  cv: sublist_indices(cv,if o="and" then "not" else identity)-1,
-  apply("and",
+  cv: sublist_indices(cv, if o1="or" then "not" else identity)-1,
+  apply(o2,
     map(lambda([i],
-        apply(if o="and" then "or" else "and",
-          map(lambda([p,q], if q=qv then p else not p), vars, _bit_values(i, n)))),
+        apply(o1,
+          map(lambda([p_,q_], if q_=qv then p_ else not p_), vars, _bit_values(i, n)))),
       cv)))$
 
 convert_to_dnf(expr, [options]) := block(
   [alg: assoc('algorithm, options)],
   if alg=false then alg: _default_algorithm(expr),
-  if alg='charvect then _convert_to_nf_charvect(expr, "or")
+  if alg='charvect then _convert_to_nf_charvect(expr, "and", "or", true)
   else apply("or",
     remove_duplicates(
       map(lambda([term], _simp_term(term, false)), _basic_terms(boolean_form(expr), "and", "or")))))$
@@ -63,7 +63,7 @@ convert_to_dnf(expr, [options]) := block(
 convert_to_cnf(expr, [options]) := block(
   [alg: assoc('algorithm, options)],
   if alg=false then alg: _default_algorithm(expr),
-  if alg='charvect then _convert_to_nf_charvect(expr, "and")
+  if alg='charvect then _convert_to_nf_charvect(expr, "or", "and", false)
   else apply("and",
     remove_duplicates(
       map(lambda([term], _simp_term(term, false)), _basic_terms(boolean_form(expr), "or", "and")))))$
