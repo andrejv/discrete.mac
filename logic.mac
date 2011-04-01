@@ -72,7 +72,7 @@ _basic_terms(expr, o1, o2) :=
   if latomp(expr) then [expr]
   else if _basic_term(expr, o1) then [_simp_term(expr, if o1="or" then true else false)]
   else if op(expr)=o2 then 
-    remove_duplicates(flatten(makelist(_basic_terms(x, o1, o2), x, args(expr))))
+    remove_duplicates(flatten(makelist(_basic_terms(x__, o1, o2), x__, args(expr))))
   else block(
     [t1__: _basic_terms(first(expr), o1, o2),
      t2__: _basic_terms(rest(expr), o1, o2)],
@@ -143,7 +143,7 @@ boolean_table(expr, [vars]) := block(
   if get(wxmaxima, version)#false then
     table_form(subst([true=1, false=0], table), column_names=header)
   else
-    apply(matrix, if header#false then cons(header, table) else header))$
+    apply(matrix, if header#false then cons(header, table) else table))$
 
 _default_algorithm(expr) := if length(listofvars(expr))<=15 then 'charvect else 'dpll$
 
@@ -170,7 +170,7 @@ contradictionp(expr, [options]) := block(
 
 satisfiablep(expr, [options]) := block(
   [alg: assoc('algorithm, options)],
-  if alg=false then alg: _default_algorithm([expr1, expr2]),
+  if alg=false then alg: _default_algorithm(expr),
   if alg='dpll then _satisfiablep_dpll(expr)
   else if alg='minisat then _satisfiablep_minisat(convert_to_cnf(expr))
   else some(identity, characteristic_vector(expr)))$
