@@ -126,7 +126,8 @@ boolean_table(expr, [vars]) := block(
   if not listp(expr) then expr: [expr],
   if length(vars)=0 then (
     vars: listofvars(expr),
-    expr: append(vars, expr))
+    expr: append(vars, expr),
+    header: expr)
   else (
     if listp(first(vars)) then (
       opts: rest(vars),
@@ -135,10 +136,10 @@ boolean_table(expr, [vars]) := block(
       opts: vars,
       vars: listofvars(expr)),
     if assoc('variables, opts, true)=true then (
-      expr: append(vars, expr))),
-  header: assoc('header, opts, expr),
-  if header#false and assoc('variables, opts, true)=true then
-    header: append(vars, header),
+      expr: append(vars, expr)),
+    header: assoc('header, opts, expr),
+    if header#false and assoc('variables, opts, true)=true then
+      header: append(vars, header)),
   table: characteristic_vector(expr),
   if get(wxmaxima, version)#false then
     table_form(subst([true=1, false=0], table), column_names=header)
