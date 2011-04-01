@@ -50,16 +50,18 @@ convert_to_cnf(expr) := apply("and",
   remove_duplicates(
     map(lambda([term], _simp_term(term, true)), _basic_terms(boolean_form(expr), "or", "and"))))$
 
-_basic_terms(expr, o1, o2) :=
+_basic_terms(expr, o1, o2) := 
   if latomp(expr) then [expr]
-  else if _basic_term(expr, o1) then [apply(o1, remove_duplicates(args(expr)))]
-  else if op(expr)=o2 then apply(append, map(lambda([a__], _basic_terms(a__,o1,o2)), args(expr)))
-  else if op(expr)=o1 then
-    flatten(
-      apply(
-        outermap,
-        cons(o1, map(lambda([a__], _basic_terms(a__,o1,o2)), args(expr)))))$
-
+  else if _basic_term(expr, o1) then [_simp_term(expr, if o1="or" then true else false)]
+  else if op(expr)=o2 then 
+    remove_duplicates(flatten(makelist(_basic_terms(x, o1, o2), x, args(expr))))
+  else block(
+    [t1__: _basic_terms(first(expr), o1, o2),
+     t2__: _basic_terms(rest(expr), o1, o2)],
+    remove_duplicates(
+      create_list(_simp_term(o1(a__,b__), if o1="or" then true else false),
+        a__, t1__, b__, t2__)))$
+  
 boolean_form(expr) := block(
   [bexpr],
   bexpr: opsubst(    "xor" = lambda([a__,b__], a__ and not(b__) or not(a__) and b__), expr),
@@ -125,9 +127,11 @@ boolean_table(expr, [vars]) := block(
   else
     apply(matrix, if header#false then cons(header, table) else header))$
 
-logic_equiv(expr1, expr2) := block(
-  [vars: listofvars([expr1, expr2])],
-  is(characteristic_vector(expr1, vars)=characteristic_vector(expr2, vars)))$
+logic_equiv(expr1, expr2, [options]) := block(
+  [alg: assoc('algorithm, options, 'charvect),
+   vars: listofvars([expr1, expr2])],
+  if alg='charvect then is(characteristic_vector(expr1, vars)=characteristic_vector(expr2, vars))
+  else tautologyp(expr1 equiv expr2, 'algorithm=alg))$
 
 tautologyp(expr, [options]) := block(
   [alg: assoc('algorithm, options, 'dpll)],
