@@ -102,7 +102,7 @@ _characteristic_vector(expr, vars) :=
 _bit_values(i,n) := reverse(makelist(?logbitp(k,i),k,0,n-1))$
 
 boolean_table(expr, [vars]) := block(
-  [table, n, opts:[], names],
+  [table, n, opts:[], names, header],
   if not listp(expr) then expr: [expr],
   if length(vars)=0 then (
     vars: listofvars(expr),
@@ -116,11 +116,14 @@ boolean_table(expr, [vars]) := block(
       vars: listofvars(expr)),
     if assoc('variables, opts, true)=true then (
       expr: append(vars, expr))),
+  header: assoc('header, opts, expr),
+  if header#false and assoc('variables, opts, true)=true then
+    header: append(vars, header),
   table: characteristic_vector(expr),
   if get(wxmaxima, version)#false then
-    table_form(subst([true=1, false=0], table), column_names=expr)
+    table_form(subst([true=1, false=0], table), column_names=header)
   else
-    apply(matrix, cons(expr, table)))$
+    apply(matrix, if header#false then cons(header, table) else header))$
 
 logic_equiv(expr1, expr2) := block(
   [vars: listofvars([expr1, expr2])],
@@ -158,10 +161,9 @@ define_variable(sat_solution, [], list)$
 
 _satisfiablep_dpll(expr) := block(
   [terms: map(
-    lambda([term], _simp_term(term, false)),
+    lambda([term], _simp_term(term, true)),
     remove_duplicates(_basic_terms(boolean_form(expr), "or", "and")))],
   sat_solution:[],
-  terms: delete(true, map(lambda([a], _simp_term(a, true)), terms)),
   _dpll(setify(terms), random_permutation(listofvars(expr))))$
 
 _dpll(expr, vars) := 
