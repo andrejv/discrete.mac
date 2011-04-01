@@ -42,13 +42,31 @@ _simp_term(expr, val) :=
     if intersection(setify(terms), setify(nterms))#{} then val
     else apply(op(expr), terms))$
 
-convert_to_dnf(expr) := apply("or",
-  remove_duplicates(
-    map(lambda([term], _simp_term(term, false)), _basic_terms(boolean_form(expr), "and", "or"))))$
+_convert_to_nf_charvect(expr, o) := block(
+  [cv: characteristic_vector(expr), vars: listofvars(expr), n, qv: if o="and" then false else true],
+  n: length(vars),
+  cv: sublist_indices(cv,if o="and" then "not" else identity)-1,
+  apply("and",
+    map(lambda([i],
+        apply(if o="and" then "or" else "and",
+          map(lambda([p,q], if q=qv then p else not p), vars, _bit_values(i, n)))),
+      cv)))$
 
-convert_to_cnf(expr) := apply("and",
-  remove_duplicates(
-    map(lambda([term], _simp_term(term, true)), _basic_terms(boolean_form(expr), "or", "and"))))$
+convert_to_dnf(expr, [options]) := block(
+  [alg: assoc('algorithm, options)],
+  if alg=false then alg: _default_algorithm(expr),
+  if alg='charvect then _convert_to_nf_charvect(expr, "or")
+  else apply("or",
+    remove_duplicates(
+      map(lambda([term], _simp_term(term, false)), _basic_terms(boolean_form(expr), "and", "or")))))$
+
+convert_to_cnf(expr, [options]) := block(
+  [alg: assoc('algorithm, options)],
+  if alg=false then alg: _default_algorithm(expr),
+  if alg='charvect then _convert_to_nf_charvect(expr, "and")
+  else apply("and",
+    remove_duplicates(
+      map(lambda([term], _simp_term(term, false)), _basic_terms(boolean_form(expr), "or", "and")))))$
 
 _basic_terms(expr, o1, o2) := 
   if latomp(expr) then [expr]
@@ -127,26 +145,32 @@ boolean_table(expr, [vars]) := block(
   else
     apply(matrix, if header#false then cons(header, table) else header))$
 
+_default_algorithm(expr) := if length(listofvars(expr))<=15 then 'charvect else 'dpll$
+
 logic_equiv(expr1, expr2, [options]) := block(
-  [alg: assoc('algorithm, options, 'charvect),
+  [alg: assoc('algorithm, options),
    vars: listofvars([expr1, expr2])],
+  if alg=false then alg: _default_algorithm([expr1, expr2]),
   if alg='charvect then is(characteristic_vector(expr1, vars)=characteristic_vector(expr2, vars))
   else tautologyp(expr1 equiv expr2, 'algorithm=alg))$
 
 tautologyp(expr, [options]) := block(
-  [alg: assoc('algorithm, options, 'dpll)],
+  [alg: assoc('algorithm, options)],
+  if alg=false then alg: _default_algorithm(expr),
   if alg='dpll then not _satisfiablep_dpll(not expr)
   else if alg='minisat then not _satisfiablep_minisat(not expr)
   else every(identity, characteristic_vector(expr)))$
 
 contradictionp(expr, [options]) := block(
-  [alg: assoc('algorithm, options, 'dpll)],
+  [alg: assoc('algorithm, options)],
+  if alg=false then alg: _default_algorithm([expr1, expr2]),
   if alg='dpll then not _satisfiablep_dpll(expr)
   else if alg='minisat then not _satisfiablep_minisat(expr)
   else every("not", characteristic_vector(expr)))$
 
 satisfiablep(expr, [options]) := block(
-  [alg: assoc('algorithm, options, 'dpll)],
+  [alg: assoc('algorithm, options)],
+  if alg=false then alg: _default_algorithm([expr1, expr2]),
   if alg='dpll then _satisfiablep_dpll(expr)
   else if alg='minisat then _satisfiablep_minisat(convert_to_cnf(expr))
   else some(identity, characteristic_vector(expr)))$
