@@ -88,33 +88,78 @@ boolean_form(expr) := block(
   bexpr: opsubst("implies" = lambda([a__,b__], not(a__) or b__), bexpr),
   bexpr: opsubst(  "equiv" = lambda([a__,b__], (a__ and b__) or (not a__ and not b__)), bexpr))$
 
-beval(expr) :=
+boolean_eval(expr) :=
   if atom(expr) then expr
-  else if op(expr)="not" then not(beval(first(expr)))
-  else if member(op(expr), ["and", "or"]) then map(beval, expr)
+  else if op(expr)="not" then not(boolean_eval(first(expr)))
+  else if member(op(expr), ["and", "or"]) then map(boolean_eval, expr)
   else if op(expr)="xor" then block(
-    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    [t1__: boolean_eval(first(expr)), t2__: boolean_eval(second(expr))],
     (t1__ and not t2__) or (not t1__ and t2__))
   else if op(expr)="nor" then block(
-    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    [t1__: boolean_eval(first(expr)), t2__: boolean_eval(second(expr))],
     not(t1__ or t2__))
   else if op(expr)="nand" then block(
-    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    [t1__: boolean_eval(first(expr)), t2__: boolean_eval(second(expr))],
     not(t1__ and t2__))
   else if op(expr)="implies" then block(
-    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    [t1__: boolean_eval(first(expr)), t2__: boolean_eval(second(expr))],
     not(t1__) or t2__)
   else if op(expr)="equiv" then block(
-    [t1__: beval(first(expr)), t2__: beval(second(expr))],
+    [t1__: boolean_eval(first(expr)), t2__: boolean_eval(second(expr))],
     (t1__ and t2__) or (not t1__ and not t2__))
-  else map(beval, expr)$
+  else map(boolean_eval, expr)$
 
+boolean_simp(expr) :=
+  if latomp(expr) then expr
+  else if op(expr)="and" then _simp_term(map(boolean_simp, expr),false)
+  else if op(expr)="or" then _simp_term(map(boolean_simp, expr), true)
+  else block(
+    [expr: map(boolean_simp, expr)],
+    if latomp(expr) then expr
+    else if op(expr)="equiv" then block(
+      [p1_:first(expr), p2_:second(expr)],
+      if p1_=p2_ then true
+      else if p1_="not"(p2_) then false
+      else if p1_=true then p2_
+      else if p2_=false then not p1_
+      else expr)
+    else if op(expr)="xor" then block(
+      [p1_:first(expr), p2_:second(expr)],
+      if p1_=p2_ then false
+      else if p1_="not"(p2_) then true
+      else if p1_=true then not p2_
+      else if p2_=false then p1_
+      else expr)
+    else if op(expr)="implies" then block(
+      [p1_:first(expr), p2_:second(expr)],
+      if p1_=p2_ then true
+      else if p1_=false then true
+      else if p1_=true then p2_
+      else if p2_=false then not p1_
+      else if p2_=true then true
+      else if p1_="not"(p2_) then not p2_
+      else expr)
+    else if op(expr)="nor" then block(
+      [p1_:first(expr), p2_:second(expr)],
+      if p1_=p2_ then not p1_
+      else if p1_=true then false
+      else if p2_=false then not p1_
+      else if p1_="not"(p2_) then false
+      else expr)
+    else if op(expr)="nand" then block(
+      [p1_:first(expr), p2_:second(expr)],
+      if p1_=p2_ then not not p1_
+      else if p1_=true then not p2_
+      else if p2_=false then true_
+      else if p1_="not"(p2_) then true
+      else expr)
+    else expr)$
 
 characteristic_vector(expr, [vars]) :=
   _characteristic_vector(expr, if vars=[] then listofvars(expr) else first(vars))$
 
 _characteristic_vector(expr, vars) :=
-  if vars=[] then [beval(expr)]
+  if vars=[] then [boolean_eval(expr)]
   else append(
     _characteristic_vector(subst(first(vars)=false, expr), rest(vars)),
     _characteristic_vector(subst(first(vars)=true, expr), rest(vars)))$
@@ -148,7 +193,7 @@ boolean_table(expr, [vars]) := block(
 
 _default_algorithm(expr) := if length(listofvars(expr))<=15 then 'charvect else 'dpll$
 
-logic_equiv(expr1, expr2, [options]) := block(
+boolean_equiv(expr1, expr2, [options]) := block(
   [alg: assoc('algorithm, options),
    vars: listofvars([expr1, expr2])],
   if alg=false then alg: _default_algorithm([expr1, expr2]),
@@ -276,12 +321,12 @@ closed_under_true(expr) := if expr=false then false else _closed_under(expr, tru
 
 closed_under_false(expr) := if expr=true then false else _closed_under(expr, false)$
 
-_closed_under(expr, val) := is( beval(subst(makelist(v__=val, v__, listofvars(expr)), expr)) = val )$
+_closed_under(expr, val) := is( boolean_eval(subst(makelist(v__=val, v__, listofvars(expr)), expr)) = val )$
 
 self_dual_bexprp(expr) := block(
   [vars: listofvars(expr), dexpr],
   dexpr: subst(makelist(v__ = "not"(v__), v__, vars), expr),
-  logic_equiv(not(expr), dexpr))$
+  boolean_equiv(not(expr), dexpr))$
 
 functionally_completep([connectives]) := block(
   [tests:[closed_under_true,
@@ -335,7 +380,7 @@ majority([vars]) := block(
 
 _boolean_term(n, vars, op) := block(
   [bv: _bit_values(n, length(vars))],
-  apply(op, beval(map("equiv", vars, bv))))$
+  apply(op, boolean_eval(map("equiv", vars, bv))))$
 
 boolean_minterms(n, vars) := 
   if integerp(n) then _boolean_term(n, vars, "and")
