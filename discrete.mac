@@ -531,13 +531,13 @@ group_orbit(elt, group, [options]) :=
   else if assoc('generators, options, large_groups) = true then block(
     [orb:[elt], new_elts, action, visited: hash_table()],
     action: assoc('action, options, lambda([p, elt], p[elt])),
-    new_elts: makelist(action(p, elt),p,listify(group)),
+    new_elts: makelist(apply(action, [p, elt]),p,listify(group)),
     while length(new_elts)>0 do block(
       [next_layer:[]],
       orb: append(orb, new_elts),
       for g_ in group do (
         for x_ in new_elts do block(
-          [new_x : action(g_, x_)],
+          [new_x : apply(action, [g_, x_])],
           if get_hash(new_x, visited, false)=false then (
             set_hash(new_x, visited, true),
             next_layer: cons(new_x, next_layer)))),
@@ -548,7 +548,7 @@ group_orbit(elt, group, [options]) :=
     if action=false then (
       if integerp(elt) then action: lambda([p, elt], p[elt])
       else action: lambda([p, elt], map(lambda([x], p[x]), elt))),
-    setify(makelist(action(p, elt), p, listify(group))))$
+    setify(makelist(apply(action, [p, elt]), p, listify(group))))$
 
 group_orbits(grp, [options]) :=
   if _sgsp(grp) then group_orbits(second(grp), 'generators=true)
@@ -653,14 +653,14 @@ group_from_generators(lst) := block(
 
 group_action(grp, st, [options]) := block(
   [mping: makelist(inpart(st, i)=i, i, 1, length(st)), grp_st:{}, p, action],
-  action: assoc('action, options),
+   action: assoc('action, options),
   if action=false then (
     if atom(first(st)) then action: lambda([p,e], p[e])
     else action: lambda([p,e], map(lambda([x], p[x]), e))),
   for p in grp do block(
     [p_st: makelist(i,i,1,length(st)), i:1],
     for a in st do block(
-      [b: action(p, a)],
+      [b: apply(action,[p, a])],
       p_st[i]: assoc(b, mping),
       i:i+1),
     grp_st: cons(p_st, grp_st)),
