@@ -347,7 +347,7 @@ convert_to_mod2(expr) := block(
   ratexpand(pol))$
 
 _convert_to_mod2(expr) :=
-  if atom(expr) then expr
+  if mapatom(expr) then expr
   else if op(expr)="not" then 1-_convert_to_mod2(first(expr))
   else if op(expr)="and" then apply("*", map(convert_to_mod2, args(expr)))
   else if op(expr)="or" then block(
