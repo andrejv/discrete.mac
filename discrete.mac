@@ -26,6 +26,8 @@ if get('logic, version)=false then load(logic)$
 
 put('discrete, 1, 'version)$
 
+_lcm(a,b) := a*b/gcd(a,b)$
+
 number_of_spanning_trees(g) :=
   block([ratmx:true],
     determinant(minor(laplacian_matrix(g), 1, 1)))$
@@ -412,7 +414,7 @@ permutation_fixed_points(p) := block(
 permutation_order(p) := block(
   [ci: permutation_to_cycles(p)],
   if ci=[] then 0
-  else xreduce(lcm, map(length, ci)))$
+  else xreduce(_lcm, map(length, ci)))$
 
 permutation_cycle_structure(p) := map(length, permutation_to_cycles(p))$
 
@@ -1073,7 +1075,7 @@ list_necklaces(len, lst, [options]) := group_orbit_representatives(
 divisiblep(a,b) := is(second(divide(b,a))=0)$
 
 _chinese_remainder_sub(a1,m1,a2,m2) := block(
-  [m:lcm(m1,m2), %k, %l, sol, k],
+  [m:_lcm(m1,m2), %k, %l, sol, k],
   sol: solve_lde2(a1+%k*m1 = a2+%l*m2, %k, %l),
   sol: subst(sol, a1+%k*m1),
   sol: subst(k=0, sol),
