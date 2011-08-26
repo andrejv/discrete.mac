@@ -1075,10 +1075,10 @@ list_necklaces(len, lst, [options]) := group_orbit_representatives(
 divisiblep(a,b) := is(second(divide(b,a))=0)$
 
 _chinese_remainder_sub(a1,m1,a2,m2) := block(
-  [m:_lcm(m1,m2), %k, %l, sol, k],
-  sol: solve_lde2(a1+%k*m1 = a2+%l*m2, %k, %l),
+  [m:_lcm(m1,m2), %k, %l, sol, %k1],
+  sol: solve_lde(a1+%k*m1 = a2+%l*m2),
   sol: subst(sol, a1+%k*m1),
-  sol: subst(k=0, sol),
+  sol: subst(%k1=0, sol),
   [mod(sol, m), m])$
 
 chinese_remainder(alst, mlst) :=
