@@ -1072,51 +1072,20 @@ list_necklaces(len, lst, [options]) := group_orbit_representatives(
 
 divisiblep(a,b) := is(second(divide(b,a))=0)$
 
-_split_equations(rems, mods) := block(
-  [pairs: makelist([rems[i], mods[i]], i, 1, length(rems)),
-   new_pairs:[]],
-  while pairs#[] do block(
-    [p1: first(pairs), add_p1:true],
-    /*print("Working on", p1),*/
-    pairs: rest(pairs),
-    for p2 in pairs while add_p1=true do block(
-      [g: gcd(second(p1), second(p2))],
-      if g>1 then block(
-        [a1: second(p1)/g, a2: second(p2)/g, g1, g_mod: first(p1)],
-        /********
-         * We have:
-         *   x = m1 (mod a)
-         *   x = m2 (mod b)
-         *   g=gcd(a,b)>1
-         * We want three equations
-         *   x = n1 (mod a1)
-         *   x = n2 (mod a2)
-         *   x = n3 (mod a3)
-         * where a1, a2, a3 are pairwise coprime and the solutions for both systems are
-         * equivalent.
-         ********/
-        /*print("Split:", p1, p2),*/
-        pairs: delete(p2, pairs),
-        if mod(first(p1), g)#mod(first(p2), g) then error("Inconsistent equations!"),
-        while (g1:gcd(g, a1))>1 do (g:g*g1, a1:a1/g1, g_mod:first(p1)),
-        while (g1:gcd(g, a2))>1 do (g:g*g1, a2:a2/g1, g_mod:first(p2)),
-        add_p1:false,
-        pairs: cons([mod(g_mod, g), g], pairs),
-        if a1>1 then pairs: cons([mod(first(p1), a1), a1], pairs),
-        if a2>1 then pairs: cons([mod(first(p2), a2), a2], pairs))),
-    if add_p1=true then new_pairs: cons(p1, new_pairs)),
-  new_pairs)$
+_chinese_remainder_sub(a1,m1,a2,m2) := block(
+  [m:lcm(m1,m2), %k, %l, sol, k],
+  sol: solve_lde2(a1+%k*m1 = a2+%l*m2, %k, %l),
+  sol: subst(sol, a1+%k*m1),
+  sol: subst(k=0, sol),
+  [mod(sol, m), m])$
 
-chinese_remainder(a_lst, m_lst) := block(
-  [M, sm_lst, split: _split_equations(a_lst, m_lst)],
-  a_lst: map('first, split),
-  m_lst: map('second, split),
-  M: apply("*", m_lst),
-  sm_lst: map(
-    lambda([a,m],
-      a*M/m*inv_mod(M/m, m)),
-    a_lst, m_lst),
-  [mod(xreduce("+", sm_lst), M), M])$
+chinese_remainder(alst, mlst) :=
+  if length(alst)<2 or length(alst)#length(mlst) then error("Wrong imput")
+  else if length(alst)=2 then _chinese_remainder_sub(alst[1], mlst[1], alst[2], mlst[2])
+  else block(
+    [a1, m1],
+    [a1, m1]: _chinese_remainder_sub(alst[1], mlst[1], alst[2], mlst[2]),
+    chinese_remainder(cons(a1, rest(alst,2)), cons(m1, rest(mlst,2))))$
 
 _new_ind_n : 0$
 _new_ind_k : 0$
@@ -1134,6 +1103,7 @@ solve_lde2(eqn, x, y) := block(
   while first(l2)#0 do block(
     [k: first(divide(l1[1], l2[1]))],
     [l1, l2]: [l2, l1-k*l2]),
+  c: c/first(l1),
   map("=", [x,y], l0*rest(c*l1+'k*l2)))$
 
 solve_lde(eqn) := (
