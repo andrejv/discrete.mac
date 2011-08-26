@@ -556,7 +556,7 @@ group_orbits(grp, [options]) :=
   if _sgsp(grp) then group_orbits(second(grp), 'generators=true)
   else block(
     [generators: assoc('generators, options, large_groups), vrt, orbits:{},
-     action: assoc('action, options)],
+     action: assoc('action, options, lambda([p, elt], p[elt]))],
     vrt: assoc('set, options),
     if listp(vrt) then vrt: setify(vrt),
     if vrt=false then vrt: setify(first(grp)),
