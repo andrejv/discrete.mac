@@ -281,7 +281,7 @@ partial_order_relationp(R, [A]) := block(
   tranzitive_relationp(R) and reflexive_relationp(R,A) and antisymmetric_relationp(R,A))$
 
 hasse_diagram(g) := block(
-  [hg, vrt, edges:[], layer, next_layer, h:0, pos:[], new_edges],
+  [hg, vrt, edges:[], layer, h:0, pos:[], new_edges],
   if not is_digraph(g) then g: graph_of_relation(g),
   vrt: setify(vertices(g)),
   layer: subset(vrt, lambda([x], is(vertex_in_degree(x, g)=0))),
@@ -290,15 +290,15 @@ hasse_diagram(g) := block(
     for i:1 thru length(layer) do (
       pos: cons([inpart(layer, i), [i*1/(length(layer)+1), h]], pos)),
     h:h+1,
-    next_layer: subset(vrt,lambda([v],
+    layer: subset(vrt,lambda([v],
         is( intersection(vrt, setify(in_neighbors(v, g)))={} ))),
-    for v in next_layer do (
-      new_edges: sublist( in_neighbors(v, g), lambda([x], member(x, layer)) ),
-      new_edges: map(lambda([x], [x,v]), new_edges),
-      edges: append(new_edges, edges)),
-    layer: next_layer,
-    vrt: setdifference(vrt, next_layer)),
-  hg: create_graph(vertices(g), edges),
+    vrt: setdifference(vrt, layer)),
+  vrt: vertices(g),
+  edg: edges(g),
+  for e in edg do (
+    [path: sublist(vrt, lambda([v], is (member([e[1], v], edg) and member([v, e[2]], edg))))],
+    if length(path)=0 then edges: cons(e, edges)),
+  hg: create_graph(vrt, edges),
   for v in vertices(g) do set_vertex_label(v, get_vertex_label(v, g), hg),
   set_positions(pos, hg),
   hg)$
