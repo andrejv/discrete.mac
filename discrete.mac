@@ -1074,20 +1074,28 @@ list_necklaces(len, lst, [options]) := group_orbit_representatives(
 
 divisiblep(a,b) := is(second(divide(b,a))=0)$
 
-_chinese_remainder_sub(a1,m1,a2,m2) := block(
+_chinese_remainder_sub(a1,b1,m1,a2,b2,m2) := block(
   [m:_lcm(m1,m2), %k, %l, sol, %k1],
-  sol: solve_lde(a1+%k*m1 = a2+%l*m2),
-  sol: subst(sol, a1+%k*m1),
+  sol: solve_lde(inv_mod(a1,m1)*b1+%k*m1 = inv_mod(a2,m2)*b2+%l*m2),
+  sol: subst(sol, inv_mod(a1,m1)*b1+%k*m1),
   sol: subst(%k1=0, sol),
   [mod(sol, m), m])$
 
-chinese_remainder(alst, mlst) :=
-  if length(alst)<2 or length(alst)#length(mlst) then error("Wrong imput")
-  else if length(alst)=2 then _chinese_remainder_sub(alst[1], mlst[1], alst[2], mlst[2])
+_chinese_remainder(alst, blst, mlst) :=
+  if length(alst)=2 then _chinese_remainder_sub(alst[1], blst[1], mlst[1], alst[2], blst[2], mlst[2])
   else block(
-    [a1, m1],
-    [a1, m1]: _chinese_remainder_sub(alst[1], mlst[1], alst[2], mlst[2]),
-    chinese_remainder(cons(a1, rest(alst,2)), cons(m1, rest(mlst,2))))$
+    [a1:1, b1, m1],
+    [b1, m1]: _chinese_remainder_sub(alst[1], blst[1], mlst[1], alst[2], blst[2], mlst[2]),
+    _chinese_remainder(cons(a1, rest(alst,2)), cons(b1, rest(blst, 2)), cons(m1, rest(mlst,2))))$
+
+chinese_remainder(alst, blst, [mlst]) := block(
+  if length(mlst)=1 then (
+    _chinese_remainder(alst, blst, first(mlst)))
+  else (
+    mlst: blst,
+    blst: alst,
+    alst: makelist(1, length(blst)),
+    _chinese_remainder(alst, blst, mlst)))$
 
 _new_ind_n : 0$
 _new_ind_k : 0$
