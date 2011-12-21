@@ -1155,7 +1155,7 @@ _solve_lde_sub(eqn) := block(
     sol : _solve_lde_sub(-best*_new_var(%n)+eqn1),
     sol : ratsimp(makelist(
         x=if assoc(x, sol)#false then assoc(x, sol)
-          else new_var(%k),
+          else _new_var(%k),
         x, delete(best_var, vars))),
     sol : append([best_var=subst(sol, rhs(first(solve(eqn, best_var))))], sol),
     ratsimp(sol)))$
