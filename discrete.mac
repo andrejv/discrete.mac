@@ -1197,7 +1197,7 @@ _solve_mod(eqs, vars, mod) :=
 linsolve_mod(eqs, vars, mod) := block(
   [sol, _new_c:0, all_sols:[]],
   eqs: makelist(lhs(eq)-rhs(eq), eq, eqs),
-  sol: block([errmgs:false], errcatch(_linsolve_mod(eqs, vars, mod))),
+  sol: errcatch(_linsolve_mod(eqs, vars, mod)),
   if sol=[] then return([])
   else sol:first(sol),
   sol: scanmap(lambda([x], if integerp(x) then mod(x, mod) else x), expand(sol)),
