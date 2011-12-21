@@ -1171,6 +1171,71 @@ int_digits(n) :=
 
 num_digits(n) := length(int_digits(n));
 
+solve_mod(eqs, vars, mod) := block(
+  [A: makelist(i-1, i, mod)],
+  eqs: makelist(lhs(eq)-rhs(eq), eq, eqs),
+  _solve_mod(eqs, vars, mod))$
+
+_solve_mod(eqs, vars, mod) := 
+  if length(vars)=1 then block(
+    [x:first(vars), sol:[], neqs],
+    for i:0 thru mod-1 do (
+      neqs: subst(x=i, eqs),
+      neqs: map(lambda([eq], is(mod(eq, mod)=0)), neqs),
+      if every(identity, neqs) then sol: append(sol, [[x=i]])),
+    return(sol))
+  else block(
+    [x:first(vars), sol:[], sub, neqs],
+    for i:0 thru mod-1 do (
+      neqs: subst(x=i, eqs),
+      sub: _solve_mod(neqs, rest(vars), mod),
+      if length(sub)>0 then (
+        for s in sub do (
+          sol:append([cons(x=i, s)], sol)))),
+    return(sol))$
+
+linsolve_mod(eqs, vars, mod) := block(
+  [sol, _new_c:0, all_sols:[]],
+  eqs: makelist(lhs(eq)-rhs(eq), eq, eqs),
+  sol: block([errmgs:false], errcatch(_linsolve_mod(eqs, vars, mod))),
+  if sol=[] then return([])
+  else sol:first(sol),
+  sol: scanmap(lambda([x], if integerp(x) then mod(x, mod) else x), expand(sol)),
+  all_sols: [sol],
+  for k in listofvars(map(rhs, sol)) do block(
+    [krange:1, new_all_sols:[]],
+    for e in sol do block(
+        [cek: coeff(rhs(e), k)],
+        if cek#0 then (
+            krange: lcm(krange, mod/gcd(cek,mod)))),
+    for kval:0 thru krange-1 do (
+        for s in all_sols do (
+            new_all_sols: cons(subst(k=kval, s), new_all_sols))),
+    all_sols: new_all_sols),
+  all_sols: scanmap(lambda([x], if integerp(x) then mod(x, mod) else x), expand(all_sols)),
+  all_sols: listify(setify(all_sols)),
+
+  return(all_sols))$
+
+_linsolve_mod(eqs, vars, mod) :=
+  if length(eqs)=1 then block(
+    [sol, eq: first(eqs)],
+    sol: solve_lde(eq+mod*concat(_c, _new_c:_new_c+1)),
+    sol: map("=", vars, subst(sol, vars)))
+  else block(
+    [sol, eq: first(eqs), sub1, sub, nvars],
+    sub1: solve_lde(eq+mod*concat(_c, _new_c:_new_c+1)),
+    sub: subst(sub1, rest(eqs)),
+    nvars: listofvars(map(rhs, sub1)),
+    nvars: makelist(v=concat(_c, _new_c:_new_c+1),v,nvars),
+    sub: subst(nvars, sub),
+    sub: _linsolve_mod(sub, listofvars(sub), mod),
+    sol: subst(sub1, vars),
+    sol: subst(nvars, sol),
+    sol: subst(sub, sol),
+    map("=", vars, sol))$
+
+
 /****************************
  *
  * Some function should be compiled!
