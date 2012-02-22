@@ -222,14 +222,16 @@ _count_cycle(A,sys,opts,n) := block(
       cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
     cnt))$
 
-count_species(A,sys,n) := block(
-  [ht,keys:[],std_frm],
-  std_frm: standard_form(sys),
-  ht: get_hash(string([std_frm, species_labeled]), _memory),
-  if ht=false then (
-    ht: hash_table(),
-    set_hash(string([std_frm, species_labeled]), _memory, ht)),
-  _count(A,std_frm,n))$
+count_species(A,sys,n) :=
+  if listp(n) then makelist(count_species(A,sys,i), i, n)
+  else block(
+    [ht,keys:[],std_frm],
+    std_frm: standard_form(sys),
+    ht: get_hash(string([std_frm, species_labeled]), _memory),
+    if ht=false then (
+      ht: hash_table(),
+      set_hash(string([std_frm, species_labeled]), _memory, ht)),
+    _count(A,std_frm,n))$
 
 _count(A,sys,n) := block(
   [As:psubst(sys, A), c, currentA:A],
@@ -530,13 +532,15 @@ _choose_cycle(A,Ao,sys,opts,n) :=
 
 select_from_species([args]) := apply(choose_from_species, args)$
 
-choose_from_species(A,sys,n) := block(
-  [ht, keys:[], std_sys:standard_form(sys)],
-  ht: get_hash(string([std_sys, species_labeled]), _memory),
-  if ht=false then (
-    ht:hash_table(),
-    set_hash(string([std_sys, species_labeled]), _memory, ht)),
-  _choose(A,std_sys,n))$
+choose_from_species(A,sys,n,[m]) :=
+  if length(m)=1 then makelist(choose_from_species(A,sys,n),m[1])
+  else block(
+    [ht, keys:[], std_sys:standard_form(sys)],
+    ht: get_hash(string([std_sys, species_labeled]), _memory),
+    if ht=false then (
+      ht:hash_table(),
+      set_hash(string([std_sys, species_labeled]), _memory, ht)),
+    _choose(A,std_sys,n))$
 
 _choose(A,sys,n) := block(
   [As:psubst(sys, A), c],
