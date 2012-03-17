@@ -4,7 +4,7 @@
  ***             ~*~ COMBINATORIAL SPECIES ~*~                     ***
  ***                                                               ***
  ***  A package for counting, listing and random generation of     ***
- ***  unlabeled combinatorial species.                             ***
+ ***  combinatorial species.                                       ***
  ***                                                               ***
  ***  Author:  Andrej Vodopivec <andrej.vodopivec@gmail.com>       ***
  ***  Licence: GPL version 2 or later                              ***
@@ -16,7 +16,7 @@
  ***        o Sum:      disjoint union                             ***
  ***        o Prod:     product                                    ***
  ***        o Set:      sets without repetition                    ***
- ***        o Multiset: sets with repetition                       ***
+ ***        o Multiset: sets with repetition (unlabeled only)      ***
  ***        o Sequence: sequences                                  ***
  ***        o Cycle:    cycles (necklaces)                         ***
  ***        o Epsilon:  an atom with size 0                        ***
@@ -25,6 +25,8 @@
  ***     - count_species(S, sys, n)                                ***
  ***     - list_species(S, sys, n)                                 ***
  ***     - choose_from_species(S, sys, n)                          ***
+ ***     - count_lspecies(S, sys, n)                               ***
+ ***     - list_lspecies(S, sys, n)                                ***
  ***                                                               ***
  ***  Working with generating functions:                           ***
  ***     - gf_equations(sys, var)                                  ***
@@ -99,8 +101,6 @@ sp_error([args]) := (
 _atomp(A,sys) := A#'Epsilon and not member(A, map(lhs, sys))$
 _epsilonp(A,sys) := is('Epsilon = assoc(A,sys))$
 
-define_variable(use_short_product, true, boolean)$
-
 _count_prods(A,B,sys,n) := block(
   if _atomp(A,sys) then (
     _count(B,sys,n-1))
@@ -112,8 +112,7 @@ _count_prods(A,B,sys,n) := block(
     _count(A,sys,n))
   else block(
     [As: makelist(_count(A,sys,i),i,0,n),
-     Bs: makelist(_count(B,sys,i),i,0,n),
-     gs],
+     Bs: makelist(_count(B,sys,i),i,0,n)],
     xreduce("+", As*reverse(Bs))))$
 
 _count_sums(args, sys, n) := lsum(_count(x, sys, n), x, args)$
@@ -149,8 +148,8 @@ _count_multiset(A,sys,opts,n) := block(
     if fixed_card_lo=0 then 1 else 0)
   else (
     if _count(A,sys,0)>0 then (
-	  if fixed_card=false then sp_error("Infinitely many sets!")
-	  else sp_error("Not implemented!")),
+      if fixed_card=false then sp_error("Infinitely many sets!")
+      else sp_error("Not implemented!")),
     g: get_hash(string(['gs, currentA]), ht, []),
     if length(g)>n then cnt: part(g, n+1)
     else (
@@ -180,8 +179,8 @@ _count_set(A,sys,opts,n) := block(
     if fixed_card_lo=0 then 1 else 0)
   else (
     if _count(A,sys,0)>0 then (
-	  if fixed_card=false then sp_error("Infinitely many sets!")
-	  else sp_error("Not implemented!")),
+      if fixed_card=false then sp_error("Infinitely many sets!")
+      else sp_error("Not implemented!")),
     g: get_hash(string(['gs, currentA]), ht, []),
     if length(g)>n then cnt: part(g, n+1)
     else (
@@ -227,10 +226,10 @@ count_species(A,sys,n) :=
   else block(
     [ht,keys:[],std_frm],
     std_frm: standard_form(sys),
-    ht: get_hash(string([std_frm, species_labeled]), _memory),
+    ht: get_hash(string([std_frm, species_unlabeled]), _memory),
     if ht=false then (
       ht: hash_table(),
-      set_hash(string([std_frm, species_labeled]), _memory, ht)),
+      set_hash(string([std_frm, species_unlabeled]), _memory, ht)),
     _count(A,std_frm,n))$
 
 _count(A,sys,n) := block(
@@ -976,12 +975,21 @@ _int(f) := block(
   int_f: map(lambda([t], i:i+1, 1/(i-1)*t), f),
   cons(0, int_f))$
 
-_diff(f) := block(
-  [i:1],
-  map(lambda([t], i:i+1, (i-1)*t), rest(f)))$
+_diff(f) :=
+  if length(f)=0 then []
+  else block(
+    [i:1],
+    map(lambda([t], i:i+1, (i-1)*t), rest(f)))$
+
+_log(f,g) := block(
+  [fp, fofp, maperror:false, mapprint:false, n:length(f)],
+  fp: _diff(f),
+  gp: _diff(g),
+  fofp:_div(fp,f,gp),
+  cons(log(f[1]), rest(_int(fofp))))$
 
 _exp(f,g) := block(
-  [fp,maperror:false, mapprint:false,n:length(f)],
+  [fp,maperror:false, mapprint:false, n:length(f)],
   fp: _diff(f),
   if length(g)=0 then g:[exp(first(f))],
   g: reverse(g),
@@ -1128,3 +1136,276 @@ count_species(Alkyl, [Alkyl=Prod(C, Multiset(Alkyl, max_card=3))], 12) - 3057;
 count_species(C, [C=Cycle(Sum(x,y,Prod(x,y)))], 10) - 684;
 
 */
+
+/***************************
+ **
+ ** LABELED SPECIES (only counting!)
+ **
+ **
+ ** Supported constructions:
+ **   - Prod
+ **   - Sum
+ **   - Set
+ **   - Seq
+ **
+ **************************/
+
+_lcount_prods(A,B,sys,n) := block(
+  if _atomp(A,sys) then (
+    n*_lcount(B,sys,n-1))
+  else if _epsilonp(A, sys) then (
+    _lcount(B,sys,n))
+  else if _atomp(B,sys) then (
+    n*_lcount(A,sys,n-1))
+  else if _epsilonp(B,sys) then(
+    _lcount(A,sys,n))
+  else block(
+    [As: makelist(_lcount(A,sys,i)/i!,i,0,n),
+     Bs: makelist(_lcount(B,sys,i)/i!,i,0,n)],
+    n!*xreduce("+", As*reverse(Bs))))$
+
+_lcount_sums(args, sys, n) := lsum(_lcount(x, sys, n), x, args)$
+
+_lcount_sequence(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt, g],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then 1 else 0)
+  else if _atomp(A,sys) then (
+    if fixed_card_lo<=n and fixed_card_hi>=n then n!
+    else 0)
+  else (
+    if _lcount(A,sys,0)>0 and fixed_card=false then sp_error("Infinitely many sequences!"),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: n!*part(g, n+1)
+    else (
+      gs: cons(1, -makelist(fixed_card_var*_lcount(A,sys,i)/i!, i, 1, n)),
+      gs: _inv(gs, g),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: n!*last(gs)),
+    if fixed_card#false then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+_lcount_set(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, g, cnt,
+   maperror:false, mapprint:false],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then (
+    if fixed_card_lo=0 then 1 else 0)
+  else (
+    if _lcount(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many sets!")
+      else sp_error("Not implemented!")),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: n!*part(g, n+1)
+    else (
+      gs: makelist(fixed_card_var*_lcount(A,sys,i)/i!,i,0,n),
+      gs: _exp(rat(gs), g),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: n!*last(gs)),
+    if fixed_card#false then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+_lcount_cycle(A,sys,opts,n) := block(
+  [gs:1, x, fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, g, cnt,
+   maperror:false, mapprint:false, gsarg:[]],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n=0 then 0
+  else (
+    if _lcount(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many cycles!")
+      else sp_error("Not implemented!")),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: n!*part(g, n+1)
+    else (
+      gs: makelist(fixed_card_var*_lcount(A,sys,i)/i!,i,0,n),
+      gsarg: get_hash(string(['gs_arg, currentA]), ht, []),
+      gs: _inv(rat(cons(1, -rest(gs))), gsarg),
+      set_hash(string(['gs_arg, currentA]), ht, gsarg),
+      gs: _log(rat(gs), g),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: n!*last(gs)),
+    if fixed_card#false then (
+      cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
+    cnt))$
+
+count_lspecies([args]) := apply(count_labeled_species, args)$
+
+count_labeled_species(A,sys,n) :=
+  if listp(n) then makelist(count_labeled_species(A,sys,i), i, n)
+  else block(
+    [ht,keys:[],std_frm],
+    std_frm: standard_form(sys),
+    ht: get_hash(string([std_frm, species_labeled]), _memory),
+    if ht=false then (
+      ht: hash_table(),
+      set_hash(string([std_frm, species_labeled]), _memory, ht)),
+    _lcount(A,std_frm,n))$
+
+_lcount(A,sys,n) := block(
+  [As:psubst(sys, A), c, currentA:A],
+  if n<0 then return(0),
+  c: get_hash(string([A, n]), ht),
+  if c=false then (
+    set_hash(string([A, n]), ht, 0),
+    keys: cons([A,n], keys),
+    if atom(As) then c:(
+      if As='Epsilon then (if n=0 then 1 else 0)
+      else (if n=1 then 1 else 0))
+    else if op(As)='Prod then c:_lcount_prods(part(As, 1), part(As, 2), sys, n)
+    else if op(As)='Sum or op(As)='Union then c:_lcount_sums(args(As), sys, n)
+    else if op(As)='Sequence or op(As)='Seq then c:_lcount_sequence(first(As), sys, rest(args(As)), n)
+    else if op(As)='Set then c:_lcount_set(first(As), sys, rest(args(As)), n)
+    else if op(As)='Cycle then c:_lcount_cycle(first(As), sys, rest(args(As)), n)
+    else sp_error("Not Implemented"),
+    c: ratdisrep(c),
+    if atom(A) then (
+      if c#get_hash(string([A,n]), ht) then (
+        set_hash(string([A, n]), ht, c),
+        /* We need to forget all values for structures of size n
+           computed after the wrong value for [A,n] was stored into the hash table! */
+        while first(keys)#[A,n] do (
+          if part(keys, 1, 2)=n then (
+            set_hash(string(first(keys)), ht, false),
+            block(
+              [gs: get_hash(string(['gs,first(keys[1])]), ht, [])],
+              if length(gs)>n then set_hash(string(['gs,first(keys[1])]), ht, makelist(gs[i],i,1,n)),
+              gs: get_hash(string(['gs_arg,first(keys[1])]), ht, []),
+              if length(gs)>n then set_hash(string(['gs_arg,first(keys[1])]),ht,makelist(gs[i],i,1,n)))),
+          keys: rest(keys)))),
+    c)
+  else c)$
+
+list_lspecies([args]) := apply(list_labeled_species, args)$
+
+list_labeled_species(A,sys,n) := block(
+  [htl:hash_table(), keysl:[], ht, keys:[], std_frm],
+  std_frm: standard_form(sys),
+  ht: get_hash(string([std_frm, species_labeled]), _memory),
+  if ht=false then (
+    ht: hash_table(),
+    set_hash(string([std_frm, species_labeled]), _memory, ht)),
+  _llist(A,std_frm,n,setify(makelist(i,i,n))))$
+
+_llist(A,sys,n,indcs) := block(
+  [As:psubst(sys, A), c],
+  c: get_hash(string([A, n, indcs]), htl),
+  if c=false then (
+    set_hash(string([A, n, indcs]), htl, []),
+    keysl: cons([A,n,indcs], keysl),
+    if atom(As) then c:(
+      if As='Epsilon then (if n=0 then [A] else [])
+      else (if n=1 then [As[first(indcs)]] else []))
+    else if op(As)='Prod then c:_llist_prods(part(As, 1), part(As, 2), sys, n, indcs)
+    else if op(As)='Sum or op(As)='Union then c:_llist_sums(args(As), sys, n, indcs)
+    else if op(As)='Sequence or op(As)='Seq then c:_llist_sequence(first(As), sys, rest(args(As)), n, indcs)
+    else if op(As)='Set then c:_llist_set(first(As), sys, rest(args(As)), n, indcs)
+    else if op(As)='Cycle then c:_llist_cycle(first(As), sys, rest(args(As)), n, indcs)
+    else sp_error("Not Implemented"),
+    if atom(A) then (
+      if c#get_hash(string([A,n,indcs]), htl) then (
+        set_hash(string([A, n, indcs]), htl, c),
+        /* We need to forget all values for structures of size n
+           computed after the wrong value for [A,n] was stored into the hash table! */
+        while first(keysl)#[A,n,indcs] do (
+          if part(keysl, 1, 2)=n then set_hash(string(first(keysl)), htl, false),
+          keysl: rest(keysl)))),
+    c)
+  else c)$
+
+_llist_prods(A,B,sys,n,indcs) := block(
+  [structs:[], Aindcs_set, Aincds, Bincds, La, Lb],
+  for i:0 thru n do (
+    Aindcs_set: powerset(indcs, i),
+    for Aindcs in Aindcs_set do (
+      Bindcs: setdifference(indcs, Aindcs),
+      La: _llist(A,sys,i,Aindcs),
+      Lb: _llist(B,sys,n-i,Bindcs),
+      structs: append(
+        create_list(Prod(a_,b_), a_, La, b_, Lb),
+        structs))),
+  structs)$
+
+_llist_sums(args, sys, n, indcs) := block(
+  [args_sums: makelist(_llist(x, sys, n, indcs), x, args)],
+  xreduce(append, args_sums))$
+
+_llist_sequence1(A,sys,w,ml,indcs) :=
+  if w<=0 then []
+  else if ml<=0 then []
+  else block(
+    [lev, seqs:[], Aindcs, Aindcs_set],
+    for i:1 thru w do (
+      Aindcs_set: powerset(indcs, i),
+      for Aindcs in Aindcs_set do block(
+        lev: _llist(A,sys,i,Aindcs),
+        if length(lev)>0 then block(
+          [Bindcs: setdifference(indcs, Aindcs)],
+          [rst: _llist_sequence1(A,sys,w-i,ml-1,Bindcs)],
+          if w=i then seqs: append(makelist('SEQ(e), e, lev), seqs)
+          else for e in lev do (
+            seqs: append(map(lambda([s], cons(e, s)), rst), seqs))))),
+    seqs)$
+
+_llist_sequence(A,sys,opts,n,indcs) := block(
+  [fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n<0 then []
+  else if n=0 then (
+    if fixed_card_lo=0 then ['SEQ()] else [])
+  else block(
+    [atoms, seqs: []],
+    if _lcount(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many sequences!")
+      else sp_error("Not Implemented")),
+    seqs: _llist_sequence1(A,sys,n,fixed_card_hi,indcs),
+    if fixed_card=true then
+      sublist(seqs, lambda([s], is(length(s)>=fixed_card_lo and length(s)<=fixed_card_hi)))
+    else
+      seqs))$
+
+_llist_set1(A,sys,w,ml,indcs) :=
+  if w<=0 then []
+  else if ml<=0 then []
+  else block(
+    [lev, seqs:[], Aindcs, Aindcs_set],
+    for i:1 thru w do (
+      Aindcs_set: map(lambda([s], cons(first(indcs), s)), powerset(rest(indcs), i-1)),
+      for Aindcs in Aindcs_set do block(
+        lev: _llist(A,sys,i,Aindcs),
+        if length(lev)>0 then block(
+          [Bindcs: setdifference(indcs, Aindcs)],
+          [rst: _llist_set1(A,sys,w-i,ml-1,Bindcs)],
+          if w=i then seqs: append(makelist('SET(e), e, lev), seqs)
+          else for e in lev do (
+            seqs: append(map(lambda([s], cons(e, s)), rst), seqs))))),
+    seqs)$
+
+_llist_set(A,sys,opts,n,indcs) := block(
+  [fixed_card_var:1, fixed_card:false,
+   fixed_card_lo:0, fixed_card_hi:n, cnt],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if n<0 then []
+  else if n=0 then (
+    if fixed_card_lo=0 then ['SEQ()] else [])
+  else block(
+    [atoms, seqs: []],
+    if _lcount(A,sys,0)>0 then (
+      if fixed_card=false then sp_error("Infinitely many sets!")
+      else sp_error("Not Implemented")),
+    seqs: _llist_set1(A,sys,n,fixed_card_hi,indcs),
+    if fixed_card=true then
+      sublist(seqs, lambda([s], is(length(s)>=fixed_card_lo and length(s)<=fixed_card_hi)))
+    else
+      seqs))$
+
+_llist_cycle(A,sys,opts,n,indcs) := block(
+  [msets: _llist_set(A,sys,opts,n,indcs)],
+  apply(append, map(_mset_to_cycles, msets)))$
+
