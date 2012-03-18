@@ -27,6 +27,7 @@
  ***     - choose_from_species(S, sys, n)                          ***
  ***     - count_lspecies(S, sys, n)                               ***
  ***     - list_lspecies(S, sys, n)                                ***
+ ***     - choose_from_lspecies(S, sys, n)                         ***
  ***                                                               ***
  ***  Working with generating functions:                           ***
  ***     - gf_equations(sys, var)                                  ***
@@ -797,12 +798,12 @@ _lcount_sequence(A,sys,opts,n) := block(
     else 0)
   else (
     if _lcount(A,sys,0)>0 and fixed_card=false then sp_error("Infinitely many sequences!"),
-    g: get_hash(string(['gs, currentA]), ht, []),
+    g: get_hash(string(['gs, currentA, opts]), ht, []),
     if length(g)>n then cnt: n!*part(g, n+1)
     else (
       gs: cons(1, -makelist(fixed_card_var*_lcount(A,sys,i)/i!, i, 1, n)),
       gs: _inv(gs, g),
-      set_hash(string(['gs, currentA]), ht, gs),
+      set_hash(string(['gs, currentA, opts]), ht, gs),
       cnt: n!*last(gs)),
     if fixed_card#false then (
       cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
@@ -819,12 +820,12 @@ _lcount_set(A,sys,opts,n) := block(
     if _lcount(A,sys,0)>0 then (
       if fixed_card=false then sp_error("Infinitely many sets!")
       else sp_error("Not implemented!")),
-    g: get_hash(string(['gs, currentA]), ht, []),
+    g: get_hash(string(['gs, currentA, opts]), ht, []),
     if length(g)>n then cnt: n!*part(g, n+1)
     else (
       gs: makelist(fixed_card_var*_lcount(A,sys,i)/i!,i,0,n),
       gs: _exp(rat(gs), g),
-      set_hash(string(['gs, currentA]), ht, gs),
+      set_hash(string(['gs, currentA, opts]), ht, gs),
       cnt: n!*last(gs)),
     if fixed_card#false then (
       cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
@@ -840,15 +841,15 @@ _lcount_cycle(A,sys,opts,n) := block(
     if _lcount(A,sys,0)>0 then (
       if fixed_card=false then sp_error("Infinitely many cycles!")
       else sp_error("Not implemented!")),
-    g: get_hash(string(['gs, currentA]), ht, []),
+    g: get_hash(string(['gs, currentA, opts]), ht, []),
     if length(g)>n then cnt: n!*part(g, n+1)
     else (
       gs: makelist(fixed_card_var*_lcount(A,sys,i)/i!,i,0,n),
-      gsarg: get_hash(string(['gs_arg, currentA]), ht, []),
+      gsarg: get_hash(string(['gs_arg, currentA, opts]), ht, []),
       gs: _inv(rat(cons(1, -rest(gs))), gsarg),
-      set_hash(string(['gs_arg, currentA]), ht, gsarg),
+      set_hash(string(['gs_arg, currentA, opts]), ht, gsarg),
       gs: _log(rat(gs), g),
-      set_hash(string(['gs, currentA]), ht, gs),
+      set_hash(string(['gs, currentA, opts]), ht, gs),
       cnt: n!*last(gs)),
     if fixed_card#false then (
       cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
@@ -1029,6 +1030,159 @@ _llist_cycle(A,sys,opts,n,indcs) := block(
   [msets: _llist_set(A,sys,opts,n,indcs)],
   apply(append, map(_mset_to_cycles, msets)))$
 
+_split_indices(indcs, k) :=
+  [makelist(indcs[i], i, 1, k), makelist(indcs[i], i, k+1, length(indcs))]$
+
+select_from_labeled_species([args]) := apply(choose_from_labeled_species, args)$
+select_from_lspecies([args])        := apply(choose_from_labeled_species, args)$
+choose_from_lspecies([args])        := apply(choose_from_labeled_species, args)$
+
+choose_from_labeled_species(A,sys,n,[m]) :=
+  if length(m)=1 then makelist(choose_from_species(A,sys,n),m[1])
+  else block(
+    [ht, keys:[], std_sys:standard_form(sys), indcs: random_permutation(makelist(i,i,n))],
+    ht: get_hash(string([std_sys, species_labeled]), _memory),
+    if ht=false then (
+      ht:hash_table(),
+      set_hash(string([std_sys, species_labeled]), _memory, ht)),
+    _lchoose(A,std_sys,n,indcs))$
+
+_lchoose(A,sys,n,indcs) := block(
+  [As:psubst(sys, A), c],
+  if atom(As) then c:(
+    if As='Epsilon then (if n=0 then A else 0)
+    else (if n=1 then arraymake(A,[first(indcs)]) else 0))
+  else if op(As)='Prod then c:_lchoose_prod(part(As, 1), part(As, 2), sys, n, indcs)
+  else if op(As)='Sum or op(As)='Union then c:_lchoose_sum(args(As), sys, n, indcs)
+  else if op(As)='Sequence or op(As)='Seq then c:_lchoose_seq(first(As), sys, rest(args(As)), n, indcs)
+  else if op(As)='Set then c:_lchoose_set(first(As), sys, rest(args(As)), n, indcs)
+  else if op(As)='Cycle then c:_lchoose_cycle(first(As), sys, rest(args(As)), n, indcs)
+  else sp_error("Not Implemented"),
+  c)$
+
+_lchoose_prod(A, B, sys, n, indcs) := block(
+  [Ac: makelist(_lcount(A, sys, i), i, 0, n),
+   Bc: makelist(_lcount(B, sys, i), i, 0, n),
+   cnt, idx,
+   Aindcs, Bindcs],
+  cnt: Ac*reverse(Bc),
+  idx: _choose_index(cnt)-1,
+  [Aindcs, Bindcs] : _split_indices(indcs, idx),
+  'PROD(_lchoose(A, sys, idx, Aindcs), _lchoose(B, sys, n-idx, Bindcs)))$
+
+_lchoose_sum(A, sys, n, indcs) := block(
+  [Ac: makelist(_lcount(a, sys, n), a, A), idx],
+  idx: _choose_index(Ac),
+  _lchoose(A[idx], sys, n, indcs))$
+
+_lchoose_seq(A,sys,opts,n,indcs) :=
+  if length(opts)#0 then _lchoose_sequence_card(A,sys,opts,n,indcs)
+  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sequences")
+  else if n=0 then 'SEQ()
+  else block(
+    [Ac: makelist(_lcount(A,sys,i)*binomial(n,i),i,0,n),
+     Bc: makelist(_lcount_sequence(A,sys,[],i),i,0,n),
+     cnt, idx, Aindcs, Bindcs],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt)-1,
+    [Aindcs, Bindcs] : _split_indices(indcs, idx),
+    cons(_lchoose(A,sys,idx,Aindcs), _lchoose_seq(A,sys,opts,n-idx,Bindcs)))$
+
+_lchoose_sequence_card(A, sys, opts, n, indcs) := block(
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi, sizes, card],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  sizes: makelist(_lcount_sequence(A,sys,['card=i%],n), i%, fixed_card_lo, fixed_card_hi),
+  card: _choose_index(sizes)-1+fixed_card_lo,
+  _lchoose_sequence_card1(A,sys,opts,n,card,indcs))$
+
+_lchoose_sequence_card1(A,sys,opts,n,card,indcs) :=
+  if card=1 then 'SEQ(_lchoose(A,sys,n,indcs))
+  else block(
+    [Ac: makelist(_lcount(A,sys,i)*binomial(n,i),i,0,n),
+     Bc: makelist(_lcount_sequence(A,sys,['card=card-1],i),i,0,n),
+     cnt, idx, Aindcs, Bindcs],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt)-1,
+    [Aindcs, Bindcs] : _split_indices(indcs, idx),
+    cons(_lchoose(A,sys,idx,Aindcs), _lchoose_sequence_card1(A,sys,opts,n-idx,card-1,Bindcs)))$
+  
+_rotate_to_min(lst):= block(
+  [m:lmin(lst)],
+  while m#first(lst) do lst:endcons(first(lst), rest(lst)),
+  lst)$
+
+_lchoose_set(A,sys,opts,n,indcs) :=
+  if length(opts)#0 then _lchoose_set_card(A,sys,opts,n,indcs)
+  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sets")
+  else if n=0 then 'SET()
+  else block(
+    [Ac: makelist(_lcount(A,sys,i)*binomial(n-1,i-1),i,1,n),
+     Bc: makelist(_lcount_set(A,sys,[],i),i,0,n-1),
+     cnt, idx, Aindcs, Bindcs],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt),
+    indcs: _rotate_to_min(indcs),
+    [Aindcs, Bindcs] : _split_indices(indcs, idx),
+    Aindcs: random_permutation(Aindcs),
+    cons(_lchoose(A,sys,idx,Aindcs), _lchoose_set(A,sys,opts,n-idx,Bindcs)))$
+
+_lchoose_set_card(A, sys, opts, n, indcs) := block(
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi, sizes, card],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  sizes: makelist(_lcount_set(A,sys,['card=i%],n), i%, fixed_card_lo, fixed_card_hi),
+  card: _choose_index(sizes)-1+fixed_card_lo,
+  _lchoose_set_card1(A,sys,opts,n,card,indcs))$
+
+_lchoose_set_card1(A,sys,opts,n,card,indcs) :=
+  if card=1 then 'SET(_lchoose(A,sys,n,indcs))
+  else block(
+    [Ac: makelist(_lcount(A,sys,i)*binomial(n-1,i-1),i,0,n),
+     Bc: makelist(_lcount_set(A,sys,['card=card-1],i),i,0,n),
+     cnt, idx, Aindcs, Bindcs],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt)-1,
+    indcs: _rotate_to_min(indcs),
+    [Aindcs, Bindcs] : _split_indices(indcs, idx),
+    Aindcs: random_permutation(Aindcs),
+    cons(_lchoose(A,sys,idx,Aindcs), _lchoose_set_card1(A,sys,opts,n-idx,card-1,Bindcs)))$
+
+_lchoose_cycle(A,sys,opts,n,indcs) :=
+  if length(opts)#0 then _lchoose_cycle_card(A,sys,opts,n,indcs)
+  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sets")
+  else if n=0 then 'SET()
+  else block(
+    [Ac: makelist(_lcount(A,sys,i)*binomial(n-1,i-1),i,1,n),
+     Bc: makelist(_lcount_sequence(A,sys,[],i),i,0,n-1),
+     cnt, idx, Aindcs, Bindcs, cycle],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt),
+    indcs: _rotate_to_min(indcs),
+    [Aindcs, Bindcs] : _split_indices(indcs, idx),
+    Aindcs: random_permutation(Aindcs),
+    cycle: cons(_lchoose(A,sys,idx,Aindcs), _lchoose_seq(A,sys,opts,n-idx,Bindcs)),
+    apply('CYCLE, args(cycle)))$
+
+_lchoose_cycle_card(A, sys, opts, n, indcs) := block(
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi, sizes, card],
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
+  if fixed_card_lo=0 then fixed_card_lo:1,
+  sizes: makelist(_lcount_cycle(A,sys,['card=i%],n), i%, fixed_card_lo, fixed_card_hi),
+  card: _choose_index(sizes)-1+fixed_card_lo,
+  _lchoose_cycle_card1(A,sys,opts,n,card,indcs))$
+
+_lchoose_cycle_card1(A,sys,opts,n,card,indcs) :=
+  if card=1 then 'CYCLE(_lchoose(A,sys,n,indcs))
+  else block(
+    [Ac: makelist(_lcount(A,sys,i)*binomial(n-1,i-1),i,0,n),
+     Bc: makelist(_lcount_sequence(A,sys,['card=card-1],i),i,0,n),
+     cnt, idx, Aindcs, Bindcs],
+    cnt: Ac*reverse(Bc),
+    idx: _choose_index(cnt)-1,
+    indcs: _rotate_to_min(indcs),
+    [Aindcs, Bindcs] : _split_indices(indcs, idx),
+    Aindcs: random_permutation(Aindcs),
+    cycle: cons(_lchoose(A,sys,idx,Aindcs), _lchoose_sequence_card1(A,sys,opts,n-idx,card-1,Bindcs)),
+    apply('CYCLE, args(cycle)))$
 
 /*********************************************************
  **
