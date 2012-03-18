@@ -30,6 +30,7 @@
  ***                                                               ***
  ***  Working with generating functions:                           ***
  ***     - gf_equations(sys, var)                                  ***
+ ***     - gf_lequations(sys, var)                                 ***
  ***     - gf_solve(eqns, fun)                                     ***
  ***     - gf_express(eqns, fun)                                   ***
  ***     - algeq_to_diffeq(eq, fun)                                ***
@@ -87,6 +88,12 @@ reset_species_memory() := (_memory: hash_table(), true)$
 sp_error([args]) := (
   reset_species_memory(),
   apply('error, args))$
+
+/*********************************************************
+ **
+ ** Unlabeled species
+ **
+ *********************************************************/
 
 /***********************
  * Counting functions.
@@ -756,399 +763,12 @@ _list(A,sys,n) := block(
     c)
   else c)$
 
-/***********************
- * Generating functions
- ***/
 
-_find_atoms(spec) := 
-  listify(
-    setdifference(
-      setify(
-        flatten(
-          map(lambda([Expr],
-              if not atom(Expr) and member(op(Expr), [Prod, Sum]) then args(Expr)
-              else if atom(Expr) then []
-              else if op(Expr)='Function then []
-              else [first(Expr)]),
-            map(rhs, spec)))),
-      setify(map(lhs, spec))))$
-
-_make_fun(e, var) := if numberp(e) then e else e(var)$
-
-gf_equations(spec, var) := block(
-  [spec: standard_form(_change_seqs(standard_form(spec))), atoms, equations_a, equations_s],
-  atoms: _find_atoms(spec),
-  equations_a: makelist(atm(var)=if atm=Epsilon then 1 else var, atm, atoms),
-  equations_s: map(
-    lambda([eq],
-      lhs(eq)(var) = psubst(
-        [Epsilon=1,
-         Sum=lambda([[args]],
-           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
-         Union=lambda([[args]],
-           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
-         Prod=lambda([a_,b_], _make_fun(a_, var)*_make_fun(b_, var)),
-         Set=lambda([[a_]], a_:first(a_), exp(-sum((-1)^k/k*a_(var^k),k,1,inf))),
-         MSet=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
-         Multiset=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
-         Cycle=lambda([[a_]], a_:first(a_), sum(totient(k)/k*log(1/(1-a_(var^k))), k, 1, inf)),
-         Seq=lambda([[a_]], a_:first(a_), 1/(1-a_(var))),
-         Sequence=lambda([[a_]], a_:first(a_), 1/(1-a_(var)))],
-        rhs(eq))),
-    spec),
-  append(equations_s, equations_a))$
-
-gf_express(sys, fun, [options]) := block(
-  [funs, expr],
-  funs: map(lhs, sys),
-  sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
-  if assoc('use_grobner, options, gf_use_grobner)=true then
-    sys: ratsimp(poly_reduced_grobner(sys, funs)),
-  expr: first(eliminate(sys, delete(fun, funs))),
-  ratdisrep(second(content(rat(expr, fun)))))$
-
-gf_solve(sys, [options]) := block(
-  [funs],
-  funs: map(lhs, sys),
-  sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
-  if assoc('use_grobner, options, gf_use_grobner)=true then
-    sys: ratsimp(poly_reduced_grobner(sys, funs)),
-  solve(sys, funs))$
-
-ratfun_to_diffeq(ratfun, fun) := block(
-  [var, deg, diff_eqn],
-  var: first(listofvars(fun)),
-  deg: hipow(num(ratfun), var),
-  diff_eqn: (fun=ratfun)*denom(ratfun),
-  diff(diff_eqn, var, deg+1))$
-
-/*******
- * algeq_to_diffeq is based on MuPAD-Combinat function
- * algeqtodiffeq
- ****/
-
-algeq_to_diffeq(eq, fun) := block(
-  [x,y,g,u,v,deg,Y,A,i],
-  local(Y),
-  eq: expand(num(ratsimp(rhs(eq)-lhs(eq)))),
-  if hipow(eq, fun)=1 then return(eq),
-  y: op(fun),
-  x: first(fun),
-  eq: subst(fun=y, eq),
-  [u,v,g]: gcdex(diff(eq,y),eq,y),
-  if not freeof(y, g) then return(algeq_to_diffeq(ratsimp(eq/g), fun)),
-  deg: hipow(eq,y),
-  Y[1]: ratsimp(remainder(-u*g*diff(eq,x),eq,y)),
-  for d:2 thru deg-1 do (
-    Y[d]: ratsimp(remainder(diff(Y[d-1],x)+diff(Y[d-1],y)*Y[1], eq, y))),
-  A: [append([1,0], makelist(0, deg-2), [1]),
-      append([0,1], makelist(0, deg-2), [y(x)])],
-  for d:1 thru deg-1 do (
-    A: append(A,[
-      append(
-        makelist(ratcoef(Y[d], y, i), i, 0, deg-1),
-        [diff(y(x), x, d)])])),
-  A: _gaussElim(apply('matrix, A)),
-  i:1,
-  while freeof(y, A[i,i]) do i:i+1,
-  num(ratsimp(A[i,i])))$
-
-_gaussElim(M) := block(
-  [M1: copymatrix(M), n:length(M)],
-  for i:1 thru n do block(
-    [pv: i],
-    while pv<=length(M1) and ratsimp(M1[pv,i])=0  do pv: pv+1,
-    if pv>length(M) then error("Singular matrix!", M),
-    if pv#i then [M1[pv], M1[i]]: [M1[i], M1[pv]],
-    for j:i+1 thru n do (
-      M1[j]: M1[j] - M1[j,i]/M[i,i]*M1[i])),
-  M1)$
-
-_shift_diff_eq(diffeq, fvar) := block(
-  [x:op(fvar), n:first(fvar), maxshift:minf],
-  scanmap(
-    lambda([expr],
-      block([sft:0],
-        if not atom(expr) and
-        subvarp(expr) and
-        op(expr)=x then (
-          sft: first(expr)-n,
-          if sft>maxshift then maxshift:sft)),
-      expr),
-    diffeq,
-    bottomup),
-  ratsimp(subst(n=n-maxshift, diffeq)))$
-
-diffeq_to_rec(deq, fun, [opts]) := block(
-  [deq: expand(num(ratsimp(rhs(deq)-lhs(deq)))), rec, rfun, rvar, var, pol_part, pol_deg],
-  var: first(fun),
-  if length(opts)=2 then [rfun, rvar]: opts
-  else if length(opts)=1 then (rfun:op(opts[1]), rvar:first(opts[1]))
-  else [rfun, rvar]: ['y, 'n],
-  pol_part: map(
-    lambda([term],
-      if freeof(fun, term) then term else 0),
-    deq),
-  pol_deg: hipow(pol_part, var),
-  if pol_part#0 then deq: diff(deq, var, pol_deg+1),
-  rec: map(
-    lambda([expr],
-      block([ddeg: derivdegree(expr, fun, var), pdeg, shift],
-        pdeg: hipow(expr/'diff(fun,var,ddeg),var),
-        shift: ddeg-pdeg,
-        expr/var^pdeg/'diff(fun,var,ddeg)*
-          pochhammer(rvar-ddeg+1+shift, ddeg)*rfun[rvar+shift])),
-    deq),
-  _shift_diff_eq(second(content(rec)), rfun[rvar]))$
-
-algeq_to_rec(eq, fun, [fn]) :=
-  if length(fn)=1 then diffeq_to_rec(algeq_to_diffeq(eq, fun), fun, fn[1])
-  else diffeq_to_rec(algeq_to_diffeq(eq, fun), fun)$
-
-ratfun_to_rec(rat_fun, [fn]) := block(
-  [var: first(listofvars(rat_fun)), F:gensym()],
-  if length(fn)=1 then algeq_to_rec(rat_fun-F(var), F(var), fn[1])
-  else algeq_to_rec(rat_fun-F(var), F(var)))$
-
-rec_to_function(rec, xn, init, [fn]) := block(
-  [function, var, sol],
-  if length(fn)=1 then function: first(fn) else function: concat(op(xn), _rf),
-  var: first(xn),
-  sol: solve(rec, xn),
-  if length(sol)#1 then error("Unable to express", xn),
-  sol: first(sol),
-  sol: rhs(subst(op(xn)=function, sol)),
-  apply(remarray, [function]),
-  apply(define,
-    [function[n],
-    if var<=length(init) then part(init, var)
-    else sol]))$
-
-/***********************
- * Power series computation.
- *
- * Functions recieve the last argument g which is a partial
- * result stored from previous computation.
- ***/
-
-_short_product(a, b) := block(
-  [n:length(a), n0, n1,
-   a_even:[], a_odd:[], b_even:[], b_odd:[], even:true,
-   l, h, m, maperror:false, mapprint:false],
-  if n=1 then return(a*b),
-  for e in a do (
-    if even then a_even: cons(e, a_even)
-    else a_odd: cons(e, a_odd),
-    even: not(even)),
-  even:true,
-  for e in b do (
-    if even then b_even: cons(e, b_even)
-    else b_odd: cons(e, b_odd),
-    even: not(even)),
-  a_even: reverse(a_even), a_odd: reverse(a_odd),
-  b_even: reverse(b_even), b_odd: reverse(b_odd),
-  l: _short_product(a_even, b_even),
-  h: _short_product(a_odd, b_odd),
-  m: _short_product(a_even+a_odd,b_even+b_odd) - l - h,
-  _add_spaces_long(l, 2) +
-    cons(0, _add_spaces_long(m, 2)) +
-    cons(0, cons(0, _add_spaces_long(h, 2))))$
-
-_inv(b, g) := block(
-  [maperror:false, mapprint:false,n:length(b)],
-  if length(g)=0 then g:[1/first(b)],
-  g:reverse(g),
-  for i:length(g)+1 thru n do (
-    g: cons(-xreduce("+", g*rest(b))/first(b), g)),
-  reverse(g))$
-
-_div(a,b,g) := block(
-  [maperror:false, mapprint:false,n:min(length(a),length(b))],
-  if length(g) = 0 then g:[first(a)/first(b)],
-  g:reverse(g),
-  for i:length(g)+1 thru n do (
-    g: cons(rat((a[i]-xreduce("+", map("*", g, rest(b))))/first(b)), g)),
-  reverse(g))$
-
-_int(f) := block(
-  [i:1, inf_f],
-  int_f: map(lambda([t], i:i+1, 1/(i-1)*t), f),
-  cons(0, int_f))$
-
-_diff(f) :=
-  if length(f)=0 then []
-  else block(
-    [i:1],
-    map(lambda([t], i:i+1, (i-1)*t), rest(f)))$
-
-_log(f,g) := block(
-  [fp, fofp, maperror:false, mapprint:false, n:length(f)],
-  fp: _diff(f),
-  gp: _diff(g),
-  fofp:_div(fp,f,gp),
-  cons(log(f[1]), rest(_int(fofp))))$
-
-_exp(f,g) := block(
-  [fp,maperror:false, mapprint:false, n:length(f)],
-  fp: _diff(f),
-  if length(g)=0 then g:[exp(first(f))],
-  g: reverse(g),
-  for i:length(g)+1 thru n do (
-    g: cons(1/(i-1)*xreduce("+", fp*g), g)),
-  reverse(g))$
-
-_add_spaces(lst, n) := block(
-  [i:1, sp:[], lst_len: length(lst)],
-  for e in lst while i<=lst_len do (
-    sp: cons(e, sp),
-    i: i+1,
-    for j:1 thru n-1 while i<=lst_len do (
-      sp: cons(0, sp),
-      i: i+1)),
-  reverse(sp))$
-
-_add_spaces_long(lst,n):= makelist(
-  if mod(i-1,n) = 0 then lst[1+(i-1)/n] else 0,
-  i,1,n*length(lst))$
-
-/***********************
- * Other functions
- ***/
-
-_ts_coeff(ser,var,n) := ratdisrep(coeff(taylor(ser, var, 0, n), var, n))$
-
-standard_form(lst) :=block(
-  [std_frm, new_spec:[], old_spec, lst1],
-  std_frm: get_hash(string(lst), _memory),
-  if std_frm=false then (
-    lst1: _fix_prods(lst),
-    old_spec: makelist(
-      lhs(s) = if atom(rhs(s)) then rhs(s)
-               else if op(rhs(s))='Function then rhs(s)
-               else map(_standard_form,rhs(s)), s, lst1),
-    std_frm: append(old_spec, new_spec),
-    set_hash(string(lst), _memory, std_frm)),
-  std_frm)$
-
-_change_seqs(spec) := 
-  xreduce(append,
-    map(
-      lambda([eq],
-        if not atom(rhs(eq)) and member(op(rhs(eq)), ['Sequence, 'Seq]) then block(
-          [newsym:gensym(), hi, lo, options: rest(args(rhs(eq)))],
-          lo: assoc('min_card, options, 0),
-          hi: assoc('max_card, options, inf),
-          if hi#inf then [eq]
-          else if lo<2 then [lhs(eq)=Sum(if lo=0 then Epsilon else first(rhs(eq)), newsym),
-                             newsym =Prod(lhs(eq), first(rhs(eq)))]
-          else [lhs(eq)=Sum(apply('Prod, makelist(first(rhs(eq)), lo)), newsym),
-                newsym =Prod(lhs(eq), first(rhs(eq)))])
-        else [eq]),
-      spec))$
-
-_standard_form(expr) := scanmap(
-  lambda([expr],
-    if atom(expr) or op(expr)="=" then expr
-    else if op(expr)='Function then expr
-    else if op(expr)='lambda then expr
-    else block(
-      [nexpr],
-      nexpr: assoc(expr, map(reverse, new_spec)),
-      if nexpr=false then (
-        nexpr:gensym(),
-        new_spec: cons(nexpr=expr, new_spec)),
-      nexpr)),
-  expr,
-  bottomup)$
-
-_fix_prods(expr) := scanmap(
-  lambda([prt], if not(atom(prt)) and op(prt)='Prod then block(
-      [args:args(prt)],
-      if length(args)=2 then prt else
-      apply('Prod, [first(args), _fix_prods(rest(prt))]))
-    else prt),
-  expr,
-  'bottomup)$
-
-get_options(opts, n) := block(
-  [fixed_card_var: 1,
-   fixed_card: false,
-   fixed_card_lo: 0,
-   fixed_card_hi: n],
-  for o in opts do (
-    if atom(o) then sp_error("Wrong thing for option 1."),
-    if op(o)="=" then (
-      fixed_card_var:rat('u),
-      fixed_card:true,
-      if first(o)='card then (
-        fixed_card_lo: fixed_card_hi:second(o))
-      else if first(o)='min_card then (
-        fixed_card_lo: second(o))
-      else if first(o)='max_card then (
-        fixed_card_hi:second(o)))
-    else sp_error("Wrong thing for option 2.")),
-  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi])$
-
-load("opsubst");
-
-nice_disp(expr) :=
-  opsubst([CYCLE="[", PROD="[", SET="[", MSET="[", SEQ="[", FUN=lambda([x], x)], expr)$
-
-nice_disp1(expr) := subst(Epsilon=[], nice_disp(expr))$
-
-catalan_number(n) := binomial(2*n,n)/(n+1)$
-
-/*
-count_species(B, [B=Sum(x, Prod(B,B))], 10)-4862;
-
-count_species(B, [B=Sum(x, Prod(Prod(x,B),B))], 15)-429;
-
-count_species(B, [B=Sequence(x)], 7)-1;
-
-count_species(B, [B=Sequence(C), C=Sum(x,y,z)], 4)-3^4;
-
-count_species(C, [C=Sequence(Prod(a, Prod(C, b)))], 20)-16796;
-
-count_species(C, [C=Sequence(Sum(x,y))], 3)-2^3;
-
-count_species(C, [C=Multiset(Sum(x,y,Prod(x,y)))], 50)-676;
-
-count_species(C, [C=Multiset(x)], 1)-1;
-
-count_species(C, [C=Prod(x,Multiset(C))], 1)-1;
-
-Count_species(B, [C=Prod(x,B), B=Multiset(C)], 10)-1842;
-
-count_species(C, [C=Sum(x,Multiset(C, card=2))], 10)-98;
-
-count_species(C, [C=Sum(x,Multiset(C, min_card=2))], 10)-2312;
-
-count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)))], 5)-2;
-
-count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)))], 5)-2;
-
-count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b),Prod(a,b)))], 5)-6;
-
-count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)), card=2)], 4)-1;
-
-count_species(Alkyl, [Alkyl=Prod(C, Multiset(Alkyl, max_card=3))], 12) - 3057;
-
-count_species(C, [C=Cycle(Sum(x,y,Prod(x,y)))], 10) - 684;
-
-*/
-
-/***************************
+/*********************************************************
  **
- ** LABELED SPECIES (only counting!)
+ ** Labeled species
  **
- **
- ** Supported constructions:
- **   - Prod
- **   - Sum
- **   - Set
- **   - Seq
- **
- **************************/
+ *********************************************************/
 
 _lcount_prods(A,B,sys,n) := block(
   if _atomp(A,sys) then (
@@ -1409,3 +1029,440 @@ _llist_cycle(A,sys,opts,n,indcs) := block(
   [msets: _llist_set(A,sys,opts,n,indcs)],
   apply(append, map(_mset_to_cycles, msets)))$
 
+
+/*********************************************************
+ **
+ ** Generating functions
+ **
+ *********************************************************/
+
+_find_atoms(spec) := 
+  listify(
+    setdifference(
+      setify(
+        flatten(
+          map(lambda([Expr],
+              if not atom(Expr) and member(op(Expr), [Prod, Sum]) then args(Expr)
+              else if atom(Expr) then []
+              else if op(Expr)='Function then []
+              else [first(Expr)]),
+            map(rhs, spec)))),
+      setify(map(lhs, spec))))$
+
+_make_fun(e, var) := if numberp(e) then e else e(var)$
+
+gf_equations(spec, var) := block(
+  [spec: standard_form(_change_seqs(standard_form(spec))), atoms, equations_a, equations_s],
+  atoms: _find_atoms(spec),
+  equations_a: makelist(atm(var)=if atm=Epsilon then 1 else var, atm, atoms),
+  equations_s: map(
+    lambda([eq],
+      lhs(eq)(var) = psubst(
+        [Epsilon=1,
+         Sum=lambda([[args]],
+           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
+         Union=lambda([[args]],
+           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
+         Prod=lambda([a_,b_], _make_fun(a_, var)*_make_fun(b_, var)),
+         Set=lambda([[a_]], a_:first(a_), exp(-sum((-1)^k/k*a_(var^k),k,1,inf))),
+         MSet=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
+         Multiset=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
+         Cycle=lambda([[a_]], a_:first(a_), sum(totient(k)/k*log(1/(1-a_(var^k))), k, 1, inf)),
+         Seq=lambda([[a_]], a_:first(a_), 1/(1-a_(var))),
+         Sequence=lambda([[a_]], a_:first(a_), 1/(1-a_(var)))],
+        rhs(eq))),
+    spec),
+  append(equations_s, equations_a))$
+
+gf_lequations([args]) := apply(gf_equations_labeled, args)$
+
+gf_equations_labeled(spec, var) := block(
+  [spec: standard_form(_change_seqs(standard_form(spec))), atoms, equations_a, equations_s],
+  atoms: _find_atoms(spec),
+  equations_a: makelist(atm(var)=if atm=Epsilon then 1 else var, atm, atoms),
+  equations_s: map(
+    lambda([eq],
+      lhs(eq)(var) = psubst(
+        [Epsilon=1,
+         Sum=lambda([[args]],
+           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
+         Union=lambda([[args]],
+           xreduce("+", map(lambda([atm], _make_fun(atm, var)), args))),
+         Prod=lambda([a_,b_], _make_fun(a_, var)*_make_fun(b_, var)),
+         Set=lambda([[a_]], block(
+             [opts: get_options(rest(a_), inf), k:gensym()],
+             a_:first(a_),
+             if opts[1]=false then exp(a_(var))
+             else if opts[3]>0 and opts[4]<inf then apply('sum, [a_(var)^k/k!, k, opts[3], opts[4]])
+             else if opts[3]>0 then exp(a_(var)) - apply('sum, [a_(var)^k/k!, k, 0, opts[3]-1])
+             else apply('sum, [a_(var)^k/k!, k, 0, opts[4]]))),
+         Cycle=lambda([[a_]], block(
+             [opts: get_options(rest(a_), inf), k:gensym()],
+             a_:first(a_),
+             if opts[1]=false then 1/log(1-a_(var))
+             else if opts[3]>0 and opts[4]<inf then apply('sum, [a_(var)^k/k, k, opts[3], opts[4]])
+             else if opts[3]>0 then exp(a_(var)) - apply('sum, [a_(var)^k/k, k, 0, opts[3]-1])
+             else apply('sum, [a_(var)^k/k, k, 0, opts[4]]))),
+         Seq=lambda([[a_]], block(
+             [opts: get_options(rest(a_), inf), k:gensym()],
+             a_:first(a_),
+             if opts[1]=false then 1/(1-a_(var))
+             else if opts[3]>0 and opts[4]<inf then apply('sum, [a_(var)^k, k, opts[3], opts[4]])
+             else if opts[3]>0 then exp(a_(var)) - apply('sum, [a_(var)^k, k, 0, opts[3]-1])
+             else apply('sum, [a_(var)^k, k, 0, opts[4]]))),
+         Sequence=lambda([[a_]],  block(
+             [opts: get_options(rest(a_), inf), k:gensym()],
+             a_:first(a_),
+             if opts[1]=false then 1/(1-a_(var))
+             else if opts[3]>0 and opts[4]<inf then apply('sum, [a_(var)^k, k, opts[3], opts[4]])
+             else if opts[3]>0 then exp(a_(var)) - apply('sum, [a_(var)^k, k, 0, opts[3]-1])
+             else apply('sum, [a_(var)^k, k, 0, opts[4]])))],
+        rhs(eq))),
+    spec),
+  append(equations_s, equations_a))$
+
+
+gf_express(sys, fun, [options]) := block(
+  [funs, expr],
+  funs: map(lhs, sys),
+  sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
+  if assoc('use_grobner, options, gf_use_grobner)=true then
+    sys: ratsimp(poly_reduced_grobner(sys, funs)),
+  expr: first(eliminate(sys, delete(fun, funs))),
+  ratdisrep(second(content(rat(expr, fun)))))$
+
+gf_solve(sys, [options]) := block(
+  [funs],
+  funs: map(lhs, sys),
+  sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
+  if assoc('use_grobner, options, gf_use_grobner)=true then
+    sys: ratsimp(poly_reduced_grobner(sys, funs)),
+  solve(sys, funs))$
+
+ratfun_to_diffeq(ratfun, fun) := block(
+  [var, deg, diff_eqn],
+  var: first(listofvars(fun)),
+  deg: hipow(num(ratfun), var),
+  diff_eqn: (fun=ratfun)*denom(ratfun),
+  diff(diff_eqn, var, deg+1))$
+
+/*******
+ * algeq_to_diffeq is based on MuPAD-Combinat function
+ * algeqtodiffeq
+ ****/
+
+algeq_to_diffeq(eq, fun) := block(
+  [x,y,g,u,v,deg,Y,A,i],
+  local(Y),
+  eq: expand(num(ratsimp(rhs(eq)-lhs(eq)))),
+  if hipow(eq, fun)=1 then return(eq),
+  y: op(fun),
+  x: first(fun),
+  eq: subst(fun=y, eq),
+  [u,v,g]: gcdex(diff(eq,y),eq,y),
+  if not freeof(y, g) then return(algeq_to_diffeq(ratsimp(eq/g), fun)),
+  deg: hipow(eq,y),
+  Y[1]: ratsimp(remainder(-u*g*diff(eq,x),eq,y)),
+  for d:2 thru deg-1 do (
+    Y[d]: ratsimp(remainder(diff(Y[d-1],x)+diff(Y[d-1],y)*Y[1], eq, y))),
+  A: [append([1,0], makelist(0, deg-2), [1]),
+      append([0,1], makelist(0, deg-2), [y(x)])],
+  for d:1 thru deg-1 do (
+    A: append(A,[
+      append(
+        makelist(ratcoef(Y[d], y, i), i, 0, deg-1),
+        [diff(y(x), x, d)])])),
+  A: _gaussElim(apply('matrix, A)),
+  i:1,
+  while freeof(y, A[i,i]) do i:i+1,
+  num(ratsimp(A[i,i])))$
+
+_gaussElim(M) := block(
+  [M1: copymatrix(M), n:length(M)],
+  for i:1 thru n do block(
+    [pv: i],
+    while pv<=length(M1) and ratsimp(M1[pv,i])=0  do pv: pv+1,
+    if pv>length(M) then error("Singular matrix!", M),
+    if pv#i then [M1[pv], M1[i]]: [M1[i], M1[pv]],
+    for j:i+1 thru n do (
+      M1[j]: M1[j] - M1[j,i]/M[i,i]*M1[i])),
+  M1)$
+
+_shift_diff_eq(diffeq, fvar) := block(
+  [x:op(fvar), n:first(fvar), maxshift:minf],
+  scanmap(
+    lambda([expr],
+      block([sft:0],
+        if not atom(expr) and
+        subvarp(expr) and
+        op(expr)=x then (
+          sft: first(expr)-n,
+          if sft>maxshift then maxshift:sft)),
+      expr),
+    diffeq,
+    bottomup),
+  ratsimp(subst(n=n-maxshift, diffeq)))$
+
+diffeq_to_rec(deq, fun, [opts]) := block(
+  [deq: expand(num(ratsimp(rhs(deq)-lhs(deq)))), rec, rfun, rvar, var, pol_part, pol_deg],
+  var: first(fun),
+  if length(opts)=2 then [rfun, rvar]: opts
+  else if length(opts)=1 then (rfun:op(opts[1]), rvar:first(opts[1]))
+  else [rfun, rvar]: ['y, 'n],
+  pol_part: map(
+    lambda([term],
+      if freeof(fun, term) then term else 0),
+    deq),
+  pol_deg: hipow(pol_part, var),
+  if pol_part#0 then deq: diff(deq, var, pol_deg+1),
+  rec: map(
+    lambda([expr],
+      block([ddeg: derivdegree(expr, fun, var), pdeg, shift],
+        pdeg: hipow(expr/'diff(fun,var,ddeg),var),
+        shift: ddeg-pdeg,
+        expr/var^pdeg/'diff(fun,var,ddeg)*
+          pochhammer(rvar-ddeg+1+shift, ddeg)*rfun[rvar+shift])),
+    deq),
+  _shift_diff_eq(second(content(rec)), rfun[rvar]))$
+
+algeq_to_rec(eq, fun, [fn]) :=
+  if length(fn)=1 then diffeq_to_rec(algeq_to_diffeq(eq, fun), fun, fn[1])
+  else diffeq_to_rec(algeq_to_diffeq(eq, fun), fun)$
+
+ratfun_to_rec(rat_fun, [fn]) := block(
+  [var: first(listofvars(rat_fun)), F:gensym()],
+  if length(fn)=1 then algeq_to_rec(rat_fun-F(var), F(var), fn[1])
+  else algeq_to_rec(rat_fun-F(var), F(var)))$
+
+rec_to_function(rec, xn, init, [fn]) := block(
+  [function, var, sol],
+  if length(fn)=1 then function: first(fn) else function: concat(op(xn), _rf),
+  var: first(xn),
+  sol: solve(rec, xn),
+  if length(sol)#1 then error("Unable to express", xn),
+  sol: first(sol),
+  sol: rhs(subst(op(xn)=function, sol)),
+  apply(remarray, [function]),
+  apply(define,
+    [function[n],
+    if var<=length(init) then part(init, var)
+    else sol]))$
+
+/*********************************************************
+ **
+ ** Power series computation
+ **
+ *********************************************************/
+
+/***********************
+ * Functions recieve the last argument g which is a partial
+ * result stored from previous computation.
+ ***/
+
+_short_product(a, b) := block(
+  [n:length(a), n0, n1,
+   a_even:[], a_odd:[], b_even:[], b_odd:[], even:true,
+   l, h, m, maperror:false, mapprint:false],
+  if n=1 then return(a*b),
+  for e in a do (
+    if even then a_even: cons(e, a_even)
+    else a_odd: cons(e, a_odd),
+    even: not(even)),
+  even:true,
+  for e in b do (
+    if even then b_even: cons(e, b_even)
+    else b_odd: cons(e, b_odd),
+    even: not(even)),
+  a_even: reverse(a_even), a_odd: reverse(a_odd),
+  b_even: reverse(b_even), b_odd: reverse(b_odd),
+  l: _short_product(a_even, b_even),
+  h: _short_product(a_odd, b_odd),
+  m: _short_product(a_even+a_odd,b_even+b_odd) - l - h,
+  _add_spaces_long(l, 2) +
+    cons(0, _add_spaces_long(m, 2)) +
+    cons(0, cons(0, _add_spaces_long(h, 2))))$
+
+_inv(b, g) := block(
+  [maperror:false, mapprint:false,n:length(b)],
+  if length(g)=0 then g:[1/first(b)],
+  g:reverse(g),
+  for i:length(g)+1 thru n do (
+    g: cons(-xreduce("+", g*rest(b))/first(b), g)),
+  reverse(g))$
+
+_div(a,b,g) := block(
+  [maperror:false, mapprint:false,n:min(length(a),length(b))],
+  if length(g) = 0 then g:[first(a)/first(b)],
+  g:reverse(g),
+  for i:length(g)+1 thru n do (
+    g: cons(rat((a[i]-xreduce("+", map("*", g, rest(b))))/first(b)), g)),
+  reverse(g))$
+
+_int(f) := block(
+  [i:1, inf_f],
+  int_f: map(lambda([t], i:i+1, 1/(i-1)*t), f),
+  cons(0, int_f))$
+
+_diff(f) :=
+  if length(f)=0 then []
+  else block(
+    [i:1],
+    map(lambda([t], i:i+1, (i-1)*t), rest(f)))$
+
+_log(f,g) := block(
+  [fp, fofp, maperror:false, mapprint:false, n:length(f)],
+  fp: _diff(f),
+  gp: _diff(g),
+  fofp:_div(fp,f,gp),
+  cons(log(f[1]), rest(_int(fofp))))$
+
+_exp(f,g) := block(
+  [fp,maperror:false, mapprint:false, n:length(f)],
+  fp: _diff(f),
+  if length(g)=0 then g:[exp(first(f))],
+  g: reverse(g),
+  for i:length(g)+1 thru n do (
+    g: cons(1/(i-1)*xreduce("+", fp*g), g)),
+  reverse(g))$
+
+_add_spaces(lst, n) := block(
+  [i:1, sp:[], lst_len: length(lst)],
+  for e in lst while i<=lst_len do (
+    sp: cons(e, sp),
+    i: i+1,
+    for j:1 thru n-1 while i<=lst_len do (
+      sp: cons(0, sp),
+      i: i+1)),
+  reverse(sp))$
+
+_add_spaces_long(lst,n):= makelist(
+  if mod(i-1,n) = 0 then lst[1+(i-1)/n] else 0,
+  i,1,n*length(lst))$
+
+/*********************************************************
+ **
+ ** Other functions
+ **
+ *********************************************************/
+
+_ts_coeff(ser,var,n) := ratdisrep(coeff(taylor(ser, var, 0, n), var, n))$
+
+standard_form(lst) :=block(
+  [std_frm, new_spec:[], old_spec, lst1],
+  std_frm: get_hash(string(lst), _memory),
+  if std_frm=false then (
+    lst1: _fix_prods(lst),
+    old_spec: makelist(
+      lhs(s) = if atom(rhs(s)) then rhs(s)
+               else if op(rhs(s))='Function then rhs(s)
+               else map(_standard_form,rhs(s)), s, lst1),
+    std_frm: append(old_spec, new_spec),
+    set_hash(string(lst), _memory, std_frm)),
+  std_frm)$
+
+_change_seqs(spec) := 
+  xreduce(append,
+    map(
+      lambda([eq],
+        if not atom(rhs(eq)) and member(op(rhs(eq)), ['Sequence, 'Seq]) then block(
+          [newsym:gensym(), hi, lo, options: rest(args(rhs(eq)))],
+          lo: assoc('min_card, options, 0),
+          hi: assoc('max_card, options, inf),
+          if hi#inf then [eq]
+          else if lo<2 then [lhs(eq)=Sum(if lo=0 then Epsilon else first(rhs(eq)), newsym),
+                             newsym =Prod(lhs(eq), first(rhs(eq)))]
+          else [lhs(eq)=Sum(apply('Prod, makelist(first(rhs(eq)), lo)), newsym),
+                newsym =Prod(lhs(eq), first(rhs(eq)))])
+        else [eq]),
+      spec))$
+
+_standard_form(expr) := scanmap(
+  lambda([expr],
+    if atom(expr) or op(expr)="=" then expr
+    else if op(expr)='Function then expr
+    else if op(expr)='lambda then expr
+    else block(
+      [nexpr],
+      nexpr: assoc(expr, map(reverse, new_spec)),
+      if nexpr=false then (
+        nexpr:gensym(),
+        new_spec: cons(nexpr=expr, new_spec)),
+      nexpr)),
+  expr,
+  bottomup)$
+
+_fix_prods(expr) := scanmap(
+  lambda([prt], if not(atom(prt)) and op(prt)='Prod then block(
+      [args:args(prt)],
+      if length(args)=2 then prt else
+      apply('Prod, [first(args), _fix_prods(rest(prt))]))
+    else prt),
+  expr,
+  'bottomup)$
+
+get_options(opts, n) := block(
+  [fixed_card_var: 1,
+   fixed_card: false,
+   fixed_card_lo: 0,
+   fixed_card_hi: n],
+  for o in opts do (
+    if atom(o) then sp_error("Wrong thing for option 1."),
+    if op(o)="=" then (
+      fixed_card_var:rat('u),
+      fixed_card:true,
+      if first(o)='card then (
+        fixed_card_lo: fixed_card_hi:second(o))
+      else if first(o)='min_card then (
+        fixed_card_lo: second(o))
+      else if first(o)='max_card then (
+        fixed_card_hi:second(o)))
+    else sp_error("Wrong thing for option 2.")),
+  [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi])$
+
+load("opsubst");
+
+nice_disp(expr) :=
+  opsubst([CYCLE="[", PROD="[", SET="[", MSET="[", SEQ="[", FUN=lambda([x], x)], expr)$
+
+nice_disp1(expr) := subst(Epsilon=[], nice_disp(expr))$
+
+catalan_number(n) := binomial(2*n,n)/(n+1)$
+
+/*
+count_species(B, [B=Sum(x, Prod(B,B))], 10)-4862;
+
+count_species(B, [B=Sum(x, Prod(Prod(x,B),B))], 15)-429;
+
+count_species(B, [B=Sequence(x)], 7)-1;
+
+count_species(B, [B=Sequence(C), C=Sum(x,y,z)], 4)-3^4;
+
+count_species(C, [C=Sequence(Prod(a, Prod(C, b)))], 20)-16796;
+
+count_species(C, [C=Sequence(Sum(x,y))], 3)-2^3;
+
+count_species(C, [C=Multiset(Sum(x,y,Prod(x,y)))], 50)-676;
+
+count_species(C, [C=Multiset(x)], 1)-1;
+
+count_species(C, [C=Prod(x,Multiset(C))], 1)-1;
+
+Count_species(B, [C=Prod(x,B), B=Multiset(C)], 10)-1842;
+
+count_species(C, [C=Sum(x,Multiset(C, card=2))], 10)-98;
+
+count_species(C, [C=Sum(x,Multiset(C, min_card=2))], 10)-2312;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)))], 5)-2;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)))], 5)-2;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b),Prod(a,b)))], 5)-6;
+
+count_species(C, [C=Set(Sum(a,b,Prod(a,a),Prod(a,b)), card=2)], 4)-1;
+
+count_species(Alkyl, [Alkyl=Prod(C, Multiset(Alkyl, max_card=3))], 12) - 3057;
+
+count_species(C, [C=Cycle(Sum(x,y,Prod(x,y)))], 10) - 684;
+
+*/
