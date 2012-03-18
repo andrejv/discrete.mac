@@ -920,7 +920,7 @@ _llist(A,sys,n,indcs) := block(
     keysl: cons([A,n,indcs], keysl),
     if atom(As) then c:(
       if As='Epsilon then (if n=0 then [A] else [])
-      else (if n=1 then [As[first(indcs)]] else []))
+      else (if n=1 then [arraymake(As, [first(indcs)])] else []))
     else if op(As)='Prod then c:_llist_prods(part(As, 1), part(As, 2), sys, n, indcs)
     else if op(As)='Sum or op(As)='Union then c:_llist_sums(args(As), sys, n, indcs)
     else if op(As)='Sequence or op(As)='Seq then c:_llist_sequence(first(As), sys, rest(args(As)), n, indcs)
@@ -939,7 +939,7 @@ _llist(A,sys,n,indcs) := block(
   else c)$
 
 _llist_prods(A,B,sys,n,indcs) := block(
-  [structs:[], Aindcs_set, Aincds, Bincds, La, Lb],
+  [structs:[], Aindcs_set, Aincds, Bincds, La, Lb, a_, b_],
   for i:0 thru n do (
     Aindcs_set: powerset(indcs, i),
     for Aindcs in Aindcs_set do (
@@ -947,7 +947,7 @@ _llist_prods(A,B,sys,n,indcs) := block(
       La: _llist(A,sys,i,Aindcs),
       Lb: _llist(B,sys,n-i,Bindcs),
       structs: append(
-        create_list(Prod(a_,b_), a_, La, b_, Lb),
+        create_list('PROD(a_,b_), a_, La, b_, Lb),
         structs))),
   structs)$
 
