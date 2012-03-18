@@ -1365,9 +1365,11 @@ _change_seqs(spec) :=
     map(
       lambda([eq],
         if not atom(rhs(eq)) and member(op(rhs(eq)), ['Sequence, 'Seq]) then block(
-          [newsym:gensym(), hi, lo, options: rest(args(rhs(eq)))],
+          [newsym:gensym(), card, hi, lo, options: rest(args(rhs(eq)))],
           lo: assoc('min_card, options, 0),
           hi: assoc('max_card, options, inf),
+          card: assoc('card, options, false),
+          if card#false then lo:hi:card,
           if hi#inf then [eq]
           else if lo<2 then [lhs(eq)=Sum(if lo=0 then Epsilon else first(rhs(eq)), newsym),
                              newsym =Prod(lhs(eq), first(rhs(eq)))]
