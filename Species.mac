@@ -894,10 +894,15 @@ _lcount(A,sys,n) := block(
           if part(keys, 1, 2)=n then (
             set_hash(string(first(keys)), ht, false),
             block(
-              [gs: get_hash(string(['gs,first(keys[1])]), ht, [])],
+              [gs: get_hash(string(['gs,first(keys[1])]), ht, []), opts],
               if length(gs)>n then set_hash(string(['gs,first(keys[1])]), ht, makelist(gs[i],i,1,n)),
               gs: get_hash(string(['gs_arg,first(keys[1])]), ht, []),
-              if length(gs)>n then set_hash(string(['gs_arg,first(keys[1])]),ht,makelist(gs[i],i,1,n)))),
+              if length(gs)>n then set_hash(string(['gs_arg,first(keys[1])]),ht,makelist(gs[i],i,1,n)),
+              opts: psubst(sys, first(keys[1])),
+              if not atom(opts) then (
+                opts: rest(args(opts)),
+                gs: get_hash(string(['gs_arg,first(keys[1]),opts]), ht, []),
+                if length(gs)>n then set_hash(string(['gs,first(keys[1]),opts]),ht,makelist(gs[i],i,1,n))))),
           keys: rest(keys)))),
     c)
   else c)$
