@@ -1227,8 +1227,20 @@ gf_equations(spec, var) := block(
          MSet=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
          Multiset=lambda([[a_]], a_:first(a_), exp(sum(1/k*a_(var^k),k,1,inf))),
          Cycle=lambda([[a_]], a_:first(a_), sum(totient(k)/k*log(1/(1-a_(var^k))), k, 1, inf)),
-         Seq=lambda([[a_]], a_:first(a_), 1/(1-a_(var))),
-         Sequence=lambda([[a_]], a_:first(a_), 1/(1-a_(var)))],
+         Seq=lambda([[a_]], block(
+             [opts: get_options(rest(a_), inf), k:gensym()],
+             a_:first(a_),
+             if opts[1]=false then 1/(1-a_(var))
+             else if opts[3]>0 and opts[4]<inf then apply('sum, [a_(var)^k, k, opts[3], opts[4]])
+             else if opts[3]>0 then exp(a_(var)) - apply('sum, [a_(var)^k, k, 0, opts[3]-1])
+             else apply('sum, [a_(var)^k, k, 0, opts[4]]))),
+         Sequence=lambda([[a_]],  block(
+             [opts: get_options(rest(a_), inf), k:gensym()],
+             a_:first(a_),
+             if opts[1]=false then 1/(1-a_(var))
+             else if opts[3]>0 and opts[4]<inf then apply('sum, [a_(var)^k, k, opts[3], opts[4]])
+             else if opts[3]>0 then exp(a_(var)) - apply('sum, [a_(var)^k, k, 0, opts[3]-1])
+             else apply('sum, [a_(var)^k, k, 0, opts[4]])))],
         rhs(eq))),
     spec),
   append(equations_s, equations_a))$
