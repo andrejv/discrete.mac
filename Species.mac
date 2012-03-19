@@ -901,7 +901,7 @@ _lcount(A,sys,n) := block(
               opts: psubst(sys, first(keys[1])),
               if not atom(opts) then (
                 opts: rest(args(opts)),
-                gs: get_hash(string(['gs_arg,first(keys[1]),opts]), ht, []),
+                gs: get_hash(string(['gs,first(keys[1]),opts]), ht, []),
                 if length(gs)>n then set_hash(string(['gs,first(keys[1]),opts]),ht,makelist(gs[i],i,1,n))))),
           keys: rest(keys)))),
     c)
