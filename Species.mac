@@ -1303,12 +1303,15 @@ gf_express(sys, fun, [options]) := block(
   ratdisrep(second(content(rat(expr, fun)))))$
 
 gf_solve(sys, [options]) := block(
-  [funs],
+  [funs, var],
   funs: map(lhs, sys),
+  var: first(listofvars(funs)),
   sys: map(lambda([eq], lhs(eq)-rhs(eq)), sys),
   if assoc('use_grobner, options, gf_use_grobner)=true then
     sys: ratsimp(poly_reduced_grobner(sys, funs)),
-  solve(sys, funs))$
+  funs: solve(sys, funs),
+  if length(funs)>0 then funs: sublist(funs, lambda([lst],every(integerp,map(lambda([expr],limit(rhs(expr),var,0)),lst)))),
+  if length(funs)=1 then first(funs) else funs)$
 
 ratfun_to_diffeq(ratfun, fun) := block(
   [var, deg, diff_eqn],
