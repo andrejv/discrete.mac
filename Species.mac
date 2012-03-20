@@ -230,7 +230,9 @@ _count_cycle(A,sys,opts,n) := block(
     cnt))$
 
 count_species(A,sys,n) :=
-  if listp(n) then makelist(count_species(A,sys,i), i, n)
+  if listp(n) then (
+    if length(n)=1 then n: makelist(i,i,0,first(n)),
+    makelist(count_species(A,sys,i), i, n))
   else block(
     [ht,keys:[],std_frm],
     std_frm: standard_form(sys),
@@ -858,7 +860,9 @@ _lcount_cycle(A,sys,opts,n) := block(
 count_lspecies([args]) := apply(count_labeled_species, args)$
 
 count_labeled_species(A,sys,n) :=
-  if listp(n) then makelist(count_labeled_species(A,sys,i), i, n)
+  if listp(n) then (
+    if length(n)=1 then n: makelist(i,i,0,first(n)),
+    makelist(count_labeled_species(A,sys,i), i, n))
   else block(
     [ht,keys:[],std_frm],
     std_frm: standard_form(sys),
