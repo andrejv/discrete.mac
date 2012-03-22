@@ -156,7 +156,7 @@ _count_multiset(A,sys,opts,n) := block(
     if fixed_card_lo=0 then 1 else 0)
   else (
     if _count(A,sys,0)>0 then (
-      if fixed_card=false then sp_error("Infinitely many sets!")
+      if fixed_card=false then sp_error("Infinitely many multisets!")
       else sp_error("Not implemented!")),
     g: get_hash(string(['gs, currentA]), ht, []),
     if length(g)>n then cnt: part(g, n+1)
@@ -341,7 +341,7 @@ _choose_sequence_card(A,Ao,sys,opts,n) := block(
 
 _choose_sequence(A,Ao,sys,opts,n) :=
   if length(opts)#0 then _choose_sequence_card(A,Ao,sys,opts,n)
-  else if _count(A,sys,0)>0 then sp_error("Infinitely many sequences")
+  else if _count(A,sys,0)>0 then sp_error("Infinitely many sequences!")
   else if n=0 then 'SEQ()
   else block(
     [Ac: makelist(_count(A,sys,i),i,0,n),
@@ -1084,7 +1084,7 @@ _lchoose_sum(A, sys, n, indcs) := block(
 
 _lchoose_seq(A,sys,opts,n,indcs) :=
   if length(opts)#0 then _lchoose_sequence_card(A,sys,opts,n,indcs)
-  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sequences")
+  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sequences!")
   else if n=0 then 'SEQ()
   else block(
     [Ac: makelist(_lcount(A,sys,i)*binomial(n,i),i,0,n),
@@ -1120,7 +1120,7 @@ _rotate_to_min(lst):= block(
 
 _lchoose_set(A,sys,opts,n,indcs) :=
   if length(opts)#0 then _lchoose_set_card(A,sys,opts,n,indcs)
-  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sets")
+  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sets!")
   else if n=0 then 'SET()
   else block(
     [Ac: makelist(_lcount(A,sys,i)*binomial(n-1,i-1),i,1,n),
@@ -1155,7 +1155,7 @@ _lchoose_set_card1(A,sys,opts,n,card,indcs) :=
 
 _lchoose_cycle(A,sys,opts,n,indcs) :=
   if length(opts)#0 then _lchoose_cycle_card(A,sys,opts,n,indcs)
-  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many sets")
+  else if _lcount(A,sys,0)>0 then sp_error("Infinitely many cycles!")
   else if n=0 then 'SET()
   else block(
     [Ac: makelist(_lcount(A,sys,i)*binomial(n-1,i-1),i,1,n),
