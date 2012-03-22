@@ -54,8 +54,8 @@ methods which are based on generating functions for the computer
 algebra system \maxima\cite{Max}.
 
 P\'olya theory \cite{P} is an important counting method when some
-objects that are beeing counted have to be considered equal because of
-symmetry. The package \command{discrete} provides basic functionaliy
+objects that are being counted have to be considered equal because of
+symmetry. The package \command{discrete} provides basic functionality
 for working with permutation groups and applications of P\'olya's
 theorems. The package also adds some extensions to the maxima
 \command{graphs} package and defines functions for other topics in
@@ -145,7 +145,7 @@ automorphisms of the graph or only the generators of the group.
        [21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]}
 \end{example}
 %
-For larger graphs an externall program called \command{bliss}
+For larger graphs an external program called \command{bliss}
 \cite{bliss} can be used to find the automorphisms.  The
 \command{bliss} program must be installed separately and the path to
 the program must be specified in the variable
@@ -181,7 +181,7 @@ the product of disjoint cycles.
 \end{example} 
 %
 The cycle index of a permutation group $G$ is the average of cycle
-indices of permutations in $G$:
+indexes of permutations in $G$:
 $$
 Z(G;x_1,\ldots,x_k) = \frac{1}{|G|}\sum_{\pi\in G}Z(\pi; x_1,\ldots,x_k).
 $$
@@ -252,7 +252,7 @@ The theorem can be applied with the
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsubsection{Necklaces and bracelets}
 
-A $n$-ary necklace of is composed of $n$ colored beads arranged in a
+A $n$-airy necklace of is composed of $n$ colored beads arranged in a
 circle. Two necklaces are the same if we can rotate the first necklace
 so that the colors of the beads match the colors of the second
 necklace.
@@ -302,21 +302,21 @@ necklace.
 			(4,0.5) circle (1mm);
 \end{tikzpicture}
 \end{center}
-\caption{4--ary necklaces of with 2 colors.}
+\caption{4--airy necklaces of with 2 colors.}
 \label{fig:necklaces2}
 \end{figure}
 
 Let $X$ be the set of $n$ beads arranged on a circle and $Y$ the set
-of colors. A $n$-ary necklace is a mapping $f:X\to Y$ which assigns
+of colors. A $n$-airy necklace is a mapping $f:X\to Y$ which assigns
 the color $f(x)$ to each bead $x\in X$. Let $G$ be a cyclic group of
 order $n$ acting on the set $X$. Two necklaces $f_1$ and $f_2$ are the
 same if there is an element $g\in G$ such that $f_2(x)=f_1(x^g)$ for
-all beads $x\in X$. In order to count the number of $n$-ary necklaces
+all beads $x\in X$. In order to count the number of $n$-airy necklaces
 we apply Theorem \ref{thm:polya1}. If we we need to substitute $r=|Y|$
-into the cycle index of the group $G$ we obtain the number of $n$-ary
+into the cycle index of the group $G$ we obtain the number of $n$-airy
 necklaces.
 
-The number of 4-ary necklaces colored with two or four colors can be
+The number of 4-airy necklaces colored with two or four colors can be
 computed in \maxima\ as follows.
 
 \begin{example}
@@ -332,7 +332,7 @@ computed in \maxima\ as follows.
 The necklaces with colors white and black are shown in Figure
 \ref{fig:necklaces2}. Using the Theorem \ref{thm:polya2} we can
 further divide the numbers according to how many beads are colored
-with the color black. We assing weight 1 to the color white and weight
+with the color black. We assign weight 1 to the color white and weight
 $b$ to the color black. The coefficient at $b^m$ tells us the number
 of necklaces with $m$ beads colored with the color black.
 
@@ -342,8 +342,8 @@ of necklaces with $m$ beads colored with the color black.
 \end{example}
 %
 If we are interested in necklaces with four colors in which colors red
-and green both appear exactly once, we assing the weights $r$ and $g$
-to colors red and green and the weigths 1 to the other two colors.
+and green both appear exactly once, we assign the weights $r$ and $g$
+to colors red and green and the weights 1 to the other two colors.
 
 When we substitute the inventory into the cycle index we obtain the
 pattern inventory, from which we need to read the coefficient at the
@@ -394,7 +394,7 @@ necklaces are called bracelets.
 	\draw[fill=white, rotate around={300:(6.5, 0.5)}] (6.5,1) circle (1mm);
 \end{tikzpicture}
 \end{center}
-\caption{6-ary necklaces colored with three black and three white beads.}
+\caption{6-airy necklaces colored with three black and three white beads.}
 \label{fig:necklaces6}
 \end{figure}
 
@@ -415,12 +415,12 @@ colored black and three beads colored white.
 (%o14) 3
 \end{example}
 %
-6-ary necklaces with three black and three white beads are shown in
+6-airy necklaces with three black and three white beads are shown in
 Figure \ref{fig:necklaces6}. The second and third necklace represent
 the same bracelet.
 
-In the last example we show how to obtain the list of 4--ary necklaces
-with 2 colors using the \command{group\_obrbits} function. We need to
+In the last example we show how to obtain the list of 4--airy necklaces
+with 2 colors using the \command{group\_orbits} function. We need to
 define a set of all colorings of the 4--cycle (represented as a list),
 and compute orbit representatives for the group action on the set of
 colorings.
@@ -429,7 +429,7 @@ The possible colorings are binary sequences of length 4 and are
 computed with the \command{bin\_seqs} function. We define the function
 \command{permute\_list} which defines the action of the group on the
 colorings. Finally we compute the group orbit representatives with the
-\command{group\_orbit\_representatices} function. We need to specify
+\command{group\_orbit\_representatives} function. We need to specify
 the set on which the group acts and the group action. We also only
 wish to see representatives for each orbit. The result should be
 compared with Figure \ref{fig:necklaces2}.
@@ -635,17 +635,19 @@ gives the number of graphs with $m$ edges on four vertices.
 \section{Combinatorial species}
 
 The package \command{Species} has functions for counting, listing and
-random selection from (unlabelled) combinatorial species. Informally,
-a combinatorial species is a class of objects which are either atomic
-or are constructed with a production rule from other combinatorial
-species.
+random selection from combinatorial species. Informally, a
+combinatorial species is a class of objects which are either atomic or
+are constructed with a production rule from other combinatorial
+species. A species is labeled, if atoms of size one are labeled with
+integers from 1 up to $n$ and unlabeled if atoms are not labeled.
 
 Atomic objects can be atoms which have size 1 or epsilon objects which
 have size 0. Productions rules implemented are disjoint union
-(\command{Sum}), cartesian product (\command{Prod}), sequence
+(\command{Sum}), Cartesian product (\command{Prod}), sequence
 (\command{Seq} or \command{Sequence}), sets with repetition
 (\command{Multiset} or \command{MSet}), sets without repetition
-(\command{Set}) and cycles (\command{Cycle}).
+(\command{Set}) and cycles (\command{Cycle}). Multisets only appear in
+unlabeled species.
 
 A \DEF{specification} for combinatorial species is a list of
 production rules. We assume that all symbols which appear in a
@@ -672,7 +674,7 @@ have a species $A$ with elements $x$ and $(x,x)$ and a species $B$ of
 sequences of elements of $A$. The element $SEQ(x, x, x, PROD(x,x), x,
 PROD(x,x))$ has cardinality 6 and size 8.
 
-There is also a special species production rule calles \command{Function}.
+There is also a special species production rule called \command{Function}.
 The rule accepts one arguments which is a function which returns the
 number of elements of given size.
 
@@ -1201,10 +1203,10 @@ can further investigate the generating functions.
 We count the number of different ways to build a two column tower with
 blocks shown in Figure \ref{fig:blocks}. We name the block with
 letters S, V, H, L1, L2, L3 and L4 from left to right, up to
-bottom. For blocks S and V we addd the number of the column in which
+bottom. For blocks S and V we add the number of the column in which
 the block sits.
 
-If we draw a line at the height $n$ we will have three posibilities
+If we draw a line at the height $n$ we will have three possibilities
 (Figure \ref{fig:towers}). The line does not intersect any block
 (species $LL$), it intersects a block V or L2 in the second column and
 no block in the first column (species $LP$) or it intersects a block V
@@ -1305,3 +1307,6 @@ $$
 \end{thebibliography}
 
 \end{document}
+
+% LocalWords:  Andrej Vodopivec olya combinatorics olya's maxima automorphisms
+% LocalWords:  monomial subst
