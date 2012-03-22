@@ -52,7 +52,7 @@
     The function returns $[x_0,M]$ such that every $x$, $x\equiv
     x_o\pmod{M}$, is a solution for the system of congruences.
   \item[divisiblep(a,b):] checks if $a$ divides $b$.
-  \item[solve\_lde(eqn):] solves a linear diophantine equation $eqn$.
+  \item[solve\_lde(eqn):] solves a linear Diophantine equation $eqn$.
   \item[int\_digits(n):] returns the list of digits of the integer
     $n$.
   \item[num\_digits(b):] returns the number of digits of the integer
@@ -337,16 +337,27 @@ The constructions \texttt{Set}, \texttt{MSet}, \texttt{Seq} and
 
 \begin{description}
   \item[count\_species(A, spec, n):] counts the number of elements of
-    size $n$ in the species $A$ which is defines with specification
-    $spec$.
+    size $n$ in the unlabeled species $A$ which is defined with
+    specification $spec$.
   \item[list\_species(A, spec, n):] returns the list of elements of
-    size $n$ in the species $A$ which is defines with specification
-    $spec$.
+    size $n$ in the unlabeled species $A$ which is defined with
+    specification $spec$.
   \item[select\_from\_species(A, spec, n):] returns a random element
-    size $n$ in the species $A$ which is defines with specification
-    $spec$.
-  \item[gf\_equations(spec, t):] return the generating functions for
-    species defined in $spec$ in variable $t$.
+    size $n$ in the unlabeled species $A$ which is defined with
+    specification $spec$.
+  \item[count\_lspecies(A, spec, n):] counts the number of elements of
+    size $n$ in the labeled species $A$ which is defined with
+    specification $spec$.
+  \item[list\_lspecies(A, spec, n):] returns the list of elements of
+    size $n$ in the labeled species $A$ which is defined with
+    specification $spec$.
+  \item[select\_from\_lspecies(A, spec, n):] returns a random element
+    size $n$ in the labeled species $A$ which is defined with
+    specification $spec$.
+  \item[gf\_equations(spec, t):] return the ordinary generating
+    functions for unlabeled species defined in $spec$ in variable $t$.
+  \item[gf\_equations(spec, t):] return the exponential generating
+    functions for labeled species defined in $spec$ in variable $t$.
   \item[gf\_express(eqs, A(t)):] find the algebraic equation for the
     generating function $A(t)$ defines with a system of equations
     $eqs$. Usually $eqs$ is obtained with \texttt{gf\_equations}.
@@ -395,3 +406,5 @@ The constructions \texttt{Set}, \texttt{MSet}, \texttt{Seq} and
 \end{description}
 
 \end{document}
+
+% LocalWords:  Andrej Vodopivec
