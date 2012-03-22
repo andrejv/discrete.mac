@@ -212,19 +212,19 @@ _count_set(A,sys,opts,n) := block(
 _count_cycle(A,sys,opts,n) := block(
   [gs:1, ci, x, inv:[],
    fixed_card_var, fixed_card, fixed_card_lo, fixed_card_hi,
-   taylordepth:n],
+   g],
   [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
-  if n=0 then (
-    if fixed_card_lo=0 then 1 else 0)
+  if n=0 then 0
   else (
-    if _count(A,sys,0)>0 and fixed_card=false then sp_error("Infinitely many cycles!"),
-    block(
-      [gs1],
-      local(gs1),
-      gs: xreduce("+", makelist('fixed_card_var*x^i*_count(A,sys,i), i, 1, n)),
-      define(gs1('fixed_card_var, x), gs),
-      gs: sum(totient(k)/k*sum(gs1(fixed_card_var^k,x^k)^i/i, i, 1, floor(n/k)), k, 1, n)),
-    cnt: _ts_coeff(gs, x, n),
+    g: get_hash(string(['gs, currentA]), ht, []),
+    if length(g)>n then cnt: part(g, n+1)
+    else (
+      if _count(A,sys,0)>0 and fixed_card=false then sp_error("Infinitely many cycles!"),
+      gs: -_log(cons(1, -makelist(_count(A,sys,i)*'fixed_card_var,i,1,n)), []),
+      gs: xreduce("+",
+        makelist(totient(i)/i*subst('fixed_card_var=fixed_card_var^i, _add_spaces(gs,i)),i,1,n)),
+      set_hash(string(['gs, currentA]), ht, gs),
+      cnt: rat(last(gs))),
     if fixed_card=true then (
       cnt: sum(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi)),
     cnt))$
@@ -426,7 +426,7 @@ _count_sets1_card(distrib, n, card) := block(
   cnt: get_hash(string(['set_count_card,distrib,n,card]), ht),
   if cnt#false then return(cnt),
   gs: xreduce("*", makelist((1+u*x^i[1])^i[2], i, distrib)),
-  gs: _ts_coeff(gs, x, n),
+  gs: ratcoef(gs, x, n),
   set_hash(string(['set_count_card,distrib,n,card]),ht,ratcoeff(gs, u, card)))$
 
 _find_shape_card(distrib, n, card) := 
@@ -450,7 +450,7 @@ _count_sets1(distrib, n) := block(
   cnt: get_hash(string(['set_count, distrib, n]), ht),
   if cnt#false then return(cnt),
   gs: xreduce("*", makelist((1+x^i[1])^i[2], i, distrib)),
-  set_hash(string(['set_count, distrib, n]), ht, _ts_coeff(gs, x, n)))$
+  set_hash(string(['set_count, distrib, n]), ht, ratcoef(gs, x, n)))$
 
 _find_shape(distrib, n) := block(
   if length(distrib)=1 then block(
@@ -486,7 +486,7 @@ _choose_set(A,sys,opts,n) := block(
     else block(
       [sel_card],
       for i:1 thru n do gs:gs*(1+u*x^i)^_count(A,sys,i),
-      cnt: _ts_coeff(gs, x, n),
+      cnt: ratcoef(gs, x, n),
       cnt: makelist(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi),
       idx: _choose_index(cnt) + fixed_card_lo - 1,
       shape: _find_shape_card(a_distrib, n, idx)),
@@ -510,20 +510,18 @@ _rotate_cycle(Cyc) := block(
 _choose_cycle(A,Ao,sys,opts,n) :=
   if n=0 then []
   else block(
-    [Al, idx, choice_d, seq, gs, gs1, cnt, choice_card, x,
-     fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi,
-     taylordepth:n],
-    local(gs1),
+    [Al, idx, choice_d, seq, gs, cnt, choice_card, x,
+     fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi],
     if _count(A,sys,0)>0 then sp_error("Infinitely many cycles!"),
     [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
     /* Distribution of the number of cycles. */
     cnt: get_hash(string(['cdistrib,A,opts,n]), ht),
-    if cnt=false then (
-      fixed_card_var:'u,
-      gs: xreduce("+", makelist('fixed_card_var*x^i*_count(A,sys,i), i, 1, n)),
-      define(gs1('fixed_card_var, x), gs),
-      gs: sum(totient(k)/k*sum(gs1(fixed_card_var^k,x^k)^i/i, i, 1, floor(n/k)), k, 1, n),
-      cnt: _ts_coeff(gs, x, n),
+    if cnt=false then block(
+      [fixed_card_var:'u],
+      gs: -_log(cons(1, -makelist(_count(A,sys,i)*'fixed_card_var,i,1,n)), []),
+      gs: xreduce("+",
+        makelist(totient(i)/i*subst('fixed_card_var=fixed_card_var^i, _add_spaces(gs,i)),i,1,n)),
+      cnt: last(gs),
       cnt: makelist(ratcoef(cnt, fixed_card_var, p), p, fixed_card_lo, fixed_card_hi),
       set_hash(string(['cdistrib,A,opts,n]),ht,cnt)),
     /* Choose the cardinality of the cycle. */
@@ -1523,8 +1521,6 @@ _add_spaces_long(lst,n):= makelist(
  ** Other functions
  **
  *********************************************************/
-
-_ts_coeff(ser,var,n) := ratdisrep(coeff(taylor(ser, var, 0, n), var, n))$
 
 standard_form(lst) :=block(
   [std_frm, new_spec:[], old_spec, lst1],
