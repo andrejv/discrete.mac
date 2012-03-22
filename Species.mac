@@ -1021,7 +1021,7 @@ _llist_set(A,sys,opts,n,indcs) := block(
   [fixed_card, fixed_card_var, fixed_card_lo, fixed_card_hi]: get_options(opts, n),
   if n<0 then []
   else if n=0 then (
-    if fixed_card_lo=0 then ['SEQ()] else [])
+    if fixed_card_lo=0 then ['SET()] else [])
   else block(
     [atoms, seqs: []],
     if _lcount(A,sys,0)>0 then (
