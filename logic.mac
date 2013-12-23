@@ -185,7 +185,7 @@ boolean_table(expr, [vars]) := block(
       expr: append(vars, expr)),
     if header#false and assoc('variables, opts, true)=true then
       header: append(vars, header)),
-  table: characteristic_vector(expr),
+  table: characteristic_vector(expr, vars),
   if get(wxmaxima, version)#false then
     table_form(subst([true=1, false=0], table), column_names=header)
   else
