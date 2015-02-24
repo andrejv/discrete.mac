@@ -180,7 +180,8 @@
     (dolist (r (list r1 r2 r3 r4 r5))
       (tk:window-configure r :variable *command*))
     (setf (tk:var-value *command*) "points")
-    (setf *canvas* (tk:canvas :parent f :width 600 :height 600))
+    (setf *canvas* (tk:canvas :parent f :width 600 :height 600
+			      :bg "white" :relief "sunken"))
     (setf *selected-vertex-var* (tk:string-variable))
     (setf *selected-edge-var* (tk:string-variable))
     (setf *selected-vertex* nil)
