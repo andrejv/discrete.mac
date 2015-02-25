@@ -105,7 +105,8 @@
 (defun add-edge (evt)
   (when (string= "edges" (tk:var-value *command*))
     (let ((id (find-vertex evt)))
-      (unless (or (null id) (string= id *selected-vertex*))
+      (unless (or (null id) (string= id *selected-vertex*)
+                  (member id (gethash *selected-vertex* *neighbors*) :test #'equal))
         (let* ((pa (gethash id *vertices*))
                (pb (gethash *selected-vertex* *vertices*))
                (eid (tk:canvas-create-line *canvas*
