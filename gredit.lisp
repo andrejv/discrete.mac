@@ -220,8 +220,8 @@
     f))
 
 (defun editor ()
-  (tk:with-tk (:title "Graph Editor")
-    (let ((f (build-editor nil)))
+  (tk:with-tk-root (r :title "Graph Editor")
+    (let ((f (build-editor r)))
       (tk:pack f :expand t :fill "both")))
   (let ((vrt) (edg))
     (maphash (lambda (k v)
