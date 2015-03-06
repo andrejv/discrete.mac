@@ -388,7 +388,7 @@ permutation_to_transpositions(p) := block(
         if length(c)<3 then [c]
         else block(
           [c1: first(c), cr: rest(c)],
-          makelist([c1, x_], x_, cr))),
+          map((lambda([x_], [c1, x_]), cr)))),
       cycles)))$
 
 permutation_from_transpositions(tr, [n]) := block(

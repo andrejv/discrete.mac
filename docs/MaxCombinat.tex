@@ -2,9 +2,12 @@
 %%% za primere: set_display(none)$ linel:60$.
 %%%
 
-\documentclass[11pt]{article}
+\documentclass[10pt]{article}
 
-\usepackage[a4paper]{geometry}
+%% TeX4HT
+%\def\pgfsysdriver{pgfsys-tex4ht.def}
+
+\usepackage[papersize={16cm,30cm}, margin=5mm]{geometry}
 \usepackage{graphicx}
 \usepackage{fancyvrb}
 
@@ -27,11 +30,14 @@
 
 \DefineVerbatimEnvironment{example}{Verbatim}{%
 	frame=leftline,%
-	rulecolor=\color{gray},%
+%	rulecolor=\color{gray},%
 	framerule=2pt,%
 	framesep=3mm}
 
 \begin{document}
+
+\pagestyle{empty}
+\sloppy
 
 \title{Counting with generating functions in \maxima}
 \author{Andrej Vodopivec\\ \texttt{andrej.vodopivec@gmail.com}}
